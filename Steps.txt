@@ -1,0 +1,4 @@
+npm create vite@latest
+npm install antd @ant-design/icons react-router-dom axios
+
+npm install livekit-client
