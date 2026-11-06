@@ -7,6 +7,12 @@ export interface LoginCredentials {
 }
 
 export const authApi = {
+  // Google One-Click Login (Matches real Cosmos Video)
+  loginWithGoogle: async (email: string = 'kuma1412002@gmail.com', name: string = 'Guest 470'): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/google/', { email, name });
+    return response.data;
+  },
+
   // Login with email and password
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/login/', credentials);
@@ -19,12 +25,12 @@ export const authApi = {
     return response.data;
   },
 
-  // Logout (optional token revocation)
+  // Logout
   logout: async (): Promise<void> => {
     try {
       await apiClient.post('/auth/logout/');
     } catch {
-      // Ignore network errors on logout
+      // Ignore
     }
   },
 };

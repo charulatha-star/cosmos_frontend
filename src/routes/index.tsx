@@ -1,6 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
+import Dashboard from '../pages/Dashboard';
+import OfficeSpace from '../pages/OfficeSpace';
 import Lobby from '../pages/Lobby';
 import MeetingRoom from '../pages/MeetingRoom';
 import ScheduleMeeting from '../pages/ScheduleMeeting';
@@ -10,40 +12,60 @@ import ProtectedRoute from './ProtectedRoute';
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Public route */}
+      {/* 1. Google One-Click Login */}
       <Route path="/login" element={<Login />} />
 
-      {/* Office Lobby (Employees and Admins) */}
+      {/* 2. Spaces Dashboard (Screenshots 1 & 2) */}
       <Route
-        path="/"
+        path="/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['Admin', 'Employee']}>
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 3. 2D Virtual Office & Call Mode (Screenshots 3, 4, 5) */}
+      <Route
+        path="/v/:spaceId/office"
+        element={
+          <ProtectedRoute>
+            <OfficeSpace />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 4. Classical Office Lobby / Rooms Directory */}
+      <Route
+        path="/rooms"
+        element={
+          <ProtectedRoute>
             <Lobby />
           </ProtectedRoute>
         }
       />
 
-      {/* Meeting Room (Admins, Employees, and invited Guests) */}
+      {/* 5. Meeting Room (WebRTC video & audio) */}
       <Route
         path="/room/:roomId"
         element={
-          <ProtectedRoute allowedRoles={['Admin', 'Employee', 'Guest']}>
+          <ProtectedRoute>
             <MeetingRoom />
           </ProtectedRoute>
         }
       />
 
-      {/* Meeting Scheduling (Admins and Employees) */}
+      {/* 6. Meeting Scheduling */}
       <Route
         path="/schedule"
         element={
-          <ProtectedRoute allowedRoles={['Admin', 'Employee']}>
+          <ProtectedRoute>
             <ScheduleMeeting />
           </ProtectedRoute>
         }
       />
 
-      {/* Admin Panel (Admin role only) */}
+      {/* 7. Admin Panel */}
       <Route
         path="/admin"
         element={
@@ -53,8 +75,9 @@ export const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Default route -> Redirect to Dashboard */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };

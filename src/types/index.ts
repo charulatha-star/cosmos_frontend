@@ -14,6 +14,15 @@ export interface User {
   status: UserPresenceStatus;
   avatar_url?: string;
   current_room_id?: string | null;
+  current_space?: string;
+}
+
+export interface SpaceItem {
+  id: string;
+  name: string;
+  admin_access: boolean;
+  is_free: boolean;
+  created_at?: string;
 }
 
 export type RoomType = 'permanent' | 'temporary';
@@ -70,9 +79,13 @@ export interface Message {
 
 export interface PresenceUpdate {
   user_id: string;
+  user_name?: string;
   status: UserPresenceStatus;
-  current_room_id?: string | null;
-  updated_at: string;
+  current_space?: string;
+  current_desk?: string | null;
+  x?: number;
+  y?: number;
+  updated_at?: string;
 }
 
 export interface AuthTokens {

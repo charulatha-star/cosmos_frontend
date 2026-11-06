@@ -1,5 +1,5 @@
-import React from 'react';
-import { Layout, Menu, Button, Tag, Dropdown, Space, Avatar, Badge } from 'antd';
+import React, { useState } from 'react';
+import { Layout, Menu, Button, Tag, Dropdown, Space, Avatar, Badge, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   UserOutlined,
@@ -8,9 +8,11 @@ import {
   CalendarOutlined,
   SettingOutlined,
   SwapOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import DirectChatDrawer from './DirectChatDrawer';
 import type { UserRole } from '../types';
 
 const { Header } = Layout;
@@ -19,6 +21,7 @@ export const Navbar: React.FC = () => {
   const { user, logout, loginAsMock } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isDMsOpen, setIsDMsOpen] = useState<boolean>(false);
 
   if (!user) return null;
 
@@ -154,6 +157,15 @@ export const Navbar: React.FC = () => {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Tooltip title="Direct Messages">
+          <Button
+            type="text"
+            icon={<MessageOutlined style={{ color: '#fff', fontSize: 18 }} />}
+            onClick={() => setIsDMsOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          />
+        </Tooltip>
+
         <Tag color={roleColors[user.role]} style={{ fontWeight: 600 }}>
           {user.role}
         </Tag>
@@ -180,6 +192,8 @@ export const Navbar: React.FC = () => {
           </Button>
         </Dropdown>
       </div>
+
+      <DirectChatDrawer open={isDMsOpen} onClose={() => setIsDMsOpen(false)} />
     </Header>
   );
 };

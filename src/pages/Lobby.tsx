@@ -38,7 +38,6 @@ import { roomsApi, type RoomWithParticipants, type CreateRoomPayload } from '../
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
-// Initial sample rooms matching the Cosmos PRD and real office layout
 const INITIAL_MOCK_ROOMS: RoomWithParticipants[] = [
   {
     id: 'all-hands',
@@ -76,15 +75,12 @@ const INITIAL_MOCK_ROOMS: RoomWithParticipants[] = [
   },
   {
     id: 'design-critique',
-    name: 'Design Critique (Full Room Demo)',
+    name: 'Design Critique (Temp)',
     type: 'temporary',
-    capacity: 2,
+    capacity: 4,
     created_by: 'usr-emp-002',
-    description: 'Temporary sync room that has already reached maximum capacity (PRD 6.2 & 12 test).',
-    active_participants: [
-      { id: 'u6', name: 'Lead Designer', role: 'Employee' },
-      { id: 'u7', name: 'Product Manager', role: 'Employee' },
-    ],
+    description: 'Temporary sync room for quick huddles.',
+    active_participants: [],
   },
 ];
 
@@ -92,7 +88,7 @@ export const Lobby: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Mode switcher: 'space' (2D interactive map) vs 'rooms' (card list)
+  // Mode switcher: Default is 'space' (The 2D interactive virtual office floor plan)
   const [viewMode, setViewMode] = useState<'space' | 'rooms'>('space');
 
   const [rooms, setRooms] = useState<RoomWithParticipants[]>(INITIAL_MOCK_ROOMS);
@@ -103,7 +99,6 @@ export const Lobby: React.FC = () => {
   const isAdmin = user?.role === 'Admin';
   const isEmployee = user?.role === 'Employee';
 
-  // Load rooms from backend if available, fallback to mock state
   const fetchRooms = useCallback(async () => {
     try {
       const data = await roomsApi.getRooms();
@@ -111,7 +106,7 @@ export const Lobby: React.FC = () => {
         setRooms(data);
       }
     } catch {
-      // Backend not running yet, retain local state
+      // Backend not running, retain local state
     }
   }, []);
 
@@ -188,7 +183,7 @@ export const Lobby: React.FC = () => {
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <Navbar />
 
-      {/* Top Mode Selector Bar (Space 2D Virtual Office vs Rooms Cards) */}
+      {/* Mode Selector Header Bar */}
       <div
         style={{
           background: '#ffffff',
@@ -197,7 +192,7 @@ export const Lobby: React.FC = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
         }}
       >
         <Space size={12}>
@@ -229,7 +224,7 @@ export const Lobby: React.FC = () => {
         </Space>
       </div>
 
-      {/* VIEW 1: Space (The 2D Interactive Virtual Office with Movable Avatars) */}
+      {/* VIEW 1: Space (2D Interactive Virtual Office with Movable Avatars) */}
       {viewMode === 'space' ? (
         <OfficeCanvas />
       ) : (

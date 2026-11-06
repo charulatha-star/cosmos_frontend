@@ -22,17 +22,13 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle unauthorized / token expiration
+// Interceptor to handle unauthorized gracefully without reloading loops
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Only log, do not force-redirect on background api checks
     if (error.response?.status === 401) {
-      // Clear token and redirect to login if session expires
-      localStorage.removeItem('cosmos_token');
-      localStorage.removeItem('cosmos_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      console.warn('API 401 Unauthorized:', error.config?.url);
     }
     return Promise.reject(error);
   }

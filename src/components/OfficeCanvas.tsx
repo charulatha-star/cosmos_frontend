@@ -10,10 +10,13 @@ import {
   PlusOutlined,
   MinusOutlined,
   VideoCameraAddOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import DirectChatDrawer from './DirectChatDrawer';
 import type { OfficeZone, OfficeAvatar } from '../types/office';
+import type { User, UserRole, UserPresenceStatus } from '../types';
 
 // Layout zones matching the real Cosmos office screenshot
 const OFFICE_ZONES: OfficeZone[] = [
@@ -115,6 +118,8 @@ export const OfficeCanvas: React.FC = () => {
   // Media states in office dock
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [isCameraOff, setIsCameraOff] = useState<boolean>(true);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [selectedContact, setSelectedContact] = useState<User | null>(null);
 
   // Other online colleagues in the office
   const [colleagues] = useState<OfficeAvatar[]>([
@@ -463,54 +468,67 @@ export const OfficeCanvas: React.FC = () => {
 
         {/* Render Online Colleagues Avatars */}
         {colleagues.map((colleague) => (
-          <div
-            key={colleague.id}
-            style={{
-              position: 'absolute',
-              left: colleague.x - 20,
-              top: colleague.y - 20,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              pointerEvents: 'none',
-              transition: 'all 0.3s ease',
-            }}
-          >
-            {/* Avatar circle with speaking pulse */}
+          <Tooltip title={`Click to message ${colleague.name}`} key={colleague.id}>
             <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedContact({
+                  id: colleague.id,
+                  name: colleague.name,
+                  role: (colleague.role || 'Employee') as UserRole,
+                  email: `${colleague.name.toLowerCase().replace(/\s+/g, '.')}@billiontags.com`,
+                  status: (colleague.status === 'away' ? 'busy' : colleague.status) as UserPresenceStatus,
+                });
+                setIsChatOpen(true);
+              }}
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                backgroundColor: colleague.avatarColor || '#1677ff',
-                color: '#fff',
+                position: 'absolute',
+                left: colleague.x - 20,
+                top: colleague.y - 20,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 15,
-                fontWeight: 700,
-                boxShadow: colleague.isSpeaking
-                  ? '0 0 0 4px rgba(82, 196, 26, 0.4)'
-                  : '0 2px 8px rgba(0,0,0,0.15)',
+                cursor: 'pointer',
+                zIndex: 15,
+                transition: 'all 0.3s ease',
               }}
             >
-              {colleague.name[0]}
+              {/* Avatar circle with speaking pulse */}
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  backgroundColor: colleague.avatarColor || '#1677ff',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  boxShadow: colleague.isSpeaking
+                    ? '0 0 0 4px rgba(82, 196, 26, 0.4)'
+                    : '0 2px 8px rgba(0,0,0,0.15)',
+                }}
+              >
+                {colleague.name[0]}
+              </div>
+              {/* Name tag pill */}
+              <div
+                style={{
+                  marginTop: 4,
+                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                  color: '#fff',
+                  fontSize: 11,
+                  padding: '1px 8px',
+                  borderRadius: 10,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {colleague.name}
+              </div>
             </div>
-            {/* Name tag pill */}
-            <div
-              style={{
-                marginTop: 4,
-                backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                color: '#fff',
-                fontSize: 11,
-                padding: '1px 8px',
-                borderRadius: 10,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {colleague.name}
-            </div>
-          </div>
+          </Tooltip>
         ))}
 
         {/* Render Local User Avatar (Movable) */}
@@ -732,12 +750,32 @@ export const OfficeCanvas: React.FC = () => {
           />
         </Tooltip>
 
+        {/* Office Direct Messages */}
+        <Tooltip title="Direct Messages">
+          <Button
+            shape="circle"
+            icon={<MessageOutlined />}
+            type={isChatOpen ? 'primary' : 'default'}
+            onClick={() => {
+              setSelectedContact(null);
+              setIsChatOpen(true);
+            }}
+          />
+        </Tooltip>
+
         {activeZone && (
           <Tag color="cyan" style={{ margin: 0 }}>
             {activeZone.name}
           </Tag>
         )}
       </div>
+
+      {/* Direct Messages Drawer */}
+      <DirectChatDrawer
+        open={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        selectedContact={selectedContact}
+      />
     </div>
   );
 };

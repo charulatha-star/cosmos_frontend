@@ -23,6 +23,7 @@ import {
   StopOutlined,
   LogoutOutlined,
   ExclamationCircleOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import {
   Room,
@@ -39,6 +40,7 @@ import { livekitApi } from '../api/livekit';
 import VideoTile from '../components/VideoTile';
 import ScreenShareView from '../components/ScreenShareView';
 import ParticipantDrawer, { type MeetingParticipant } from '../components/ParticipantDrawer';
+import InRoomChatDrawer from '../components/InRoomChatDrawer';
 import type { UserRole } from '../types';
 
 const { Header, Content, Footer } = Layout;
@@ -76,8 +78,9 @@ export const MeetingRoom: React.FC = () => {
   const [callDuration, setCallDuration] = useState<number>(0);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
-  // Participant Drawer & Leave Modal states
+  // Participant Drawer, Chat Drawer & Leave Modal states
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState<boolean>(false);
 
   // Participants list
@@ -498,6 +501,16 @@ export const MeetingRoom: React.FC = () => {
             Participants ({participants.length})
           </Button>
 
+          {/* In-Room Chat button */}
+          <Button
+            type="text"
+            icon={<MessageOutlined />}
+            style={{ color: isChatOpen ? '#1677ff' : '#fff' }}
+            onClick={() => setIsChatOpen(true)}
+          >
+            Chat
+          </Button>
+
           <Button
             type="primary"
             danger
@@ -686,6 +699,18 @@ export const MeetingRoom: React.FC = () => {
           />
         </Tooltip>
 
+        {/* In-Room Chat Toggle */}
+        <Tooltip title="In-Room Chat">
+          <Button
+            shape="circle"
+            size="large"
+            type={isChatOpen ? 'primary' : 'default'}
+            icon={<MessageOutlined />}
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            style={{ width: 48, height: 48 }}
+          />
+        </Tooltip>
+
         {/* Leave Room Button */}
         <Tooltip title="Leave Room">
           <Button
@@ -709,6 +734,13 @@ export const MeetingRoom: React.FC = () => {
         isCurrentUserHost={isHost}
         onMuteParticipant={handleMuteParticipant}
         onRemoveParticipant={handleRemoveParticipant}
+      />
+
+      {/* In-Room Chat Drawer (PRD Step 5) */}
+      <InRoomChatDrawer
+        open={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        roomId={roomId || ''}
       />
 
       {/* Leave vs End Meeting Modal (PRD Section 7) */}
