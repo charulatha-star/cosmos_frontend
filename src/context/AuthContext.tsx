@@ -8,7 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<void>;
-  loginWithGoogle: (email?: string, name?: string) => Promise<void>;
+  loginWithGoogle: (email: string, password?: string, name?: string) => Promise<void>;
   loginAsMock: (role: UserRole) => void;
   logout: () => void;
 }
@@ -25,21 +25,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Load existing session on initial load
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
+    const initializeAuth = async () => {
+      try {
+        const storedToken = localStorage.getItem(TOKEN_KEY);
+        const storedUser = localStorage.getItem(USER_KEY);
 
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        if (storedToken && storedUser) {
+          // If it's a legacy mock token, clean it immediately
+          if (storedToken.startsWith('google-jwt-') || storedToken.startsWith('mock-')) {
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USER_KEY);
+            setToken(null);
+            setUser(null);
+            return;
+          }
+
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+
+          // Validate token with backend
+          try {
+            const freshUser = await authApi.getCurrentUser();
+            setUser(freshUser);
+            localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
+          } catch (err: any) {
+            if (err.response?.status === 401) {
+              console.warn('Session expired or invalid, logging out.');
+              localStorage.removeItem(TOKEN_KEY);
+              localStorage.removeItem(USER_KEY);
+              setToken(null);
+              setUser(null);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load session from storage', e);
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      console.error('Failed to load session from storage', e);
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    initializeAuth();
   }, []);
 
   const saveSession = (tokens: AuthTokens, userData: User) => {
@@ -49,31 +77,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem(USER_KEY, JSON.stringify(userData));
   };
 
-  // Google One-Click Login (Matches Real Cosmos Video)
+  // Google Sign-in with email and password
   const loginWithGoogle = async (
-    email: string = 'kuma1412002@gmail.com',
-    name: string = 'Guest 470'
+    email: string,
+    password?: string,
+    name?: string
   ) => {
     setIsLoading(true);
     try {
-      try {
-        const response = await authApi.loginWithGoogle(email, name);
-        saveSession(response.tokens, response.user);
-      } catch {
-        // Instant reliable fallback if backend server isn't running
-        const fallbackUser: User = {
-          id: 'usr-guest-470',
-          name: name,
-          email: email,
-          role: 'Admin',
-          status: 'online',
-          avatar_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest470',
-        };
-        const fallbackTokens: AuthTokens = {
-          access: `google-jwt-${Date.now()}`,
-        };
-        saveSession(fallbackTokens, fallbackUser);
-      }
+      const response = await authApi.loginWithGoogle(email, password, name);
+      saveSession(response.tokens, response.user);
+    } catch (error: any) {
+      console.error('Google login failed:', error);
+      const detail =
+        error.response?.data?.detail ||
+        error.message ||
+        'Cannot connect to backend server on http://localhost:8000';
+      throw new Error(detail);
     } finally {
       setIsLoading(false);
     }

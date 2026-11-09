@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, List, Avatar, Input, Button, Space, Badge, Empty } from 'antd';
-import { SendOutlined, MessageOutlined } from '@ant-design/icons';
+import { SendOutlined, MessageOutlined, SyncOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 import { chatApi } from '../api/chat';
 import type { Message, User } from '../types';
@@ -22,51 +22,29 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [fetchingContacts, setFetchingContacts] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fallback initial team contacts if backend is offline
-  const DEFAULT_TEAMMATES: User[] = [
-    {
-      id: 'c1',
-      name: 'Charu Latha',
-      email: 'charu.latha@billiontags.com',
-      role: 'Employee',
-      status: 'online',
-    },
-    {
-      id: 'c2',
-      name: 'Alex Rivera',
-      email: 'alex.rivera@billiontags.com',
-      role: 'Employee',
-      status: 'online',
-    },
-    {
-      id: 'c3',
-      name: 'Sarah Connor',
-      email: 'sarah.admin@billiontags.com',
-      role: 'Admin',
-      status: 'busy',
-    },
-  ];
-
-  // Load office contacts
-  useEffect(() => {
-    const fetchContacts = async () => {
-      try {
-        const data = await chatApi.getContacts();
-        if (data && data.length > 0) {
-          setContacts(data);
-          if (!activeContact) setActiveContact(data[0]);
-        } else {
-          setContacts(DEFAULT_TEAMMATES.filter((c) => c.email !== user?.email));
-          if (!activeContact) setActiveContact(DEFAULT_TEAMMATES[0]);
+  // Load real office contacts from backend
+  const fetchContacts = async () => {
+    setFetchingContacts(true);
+    try {
+      const data = await chatApi.getContacts();
+      if (data && data.length > 0) {
+        const filtered = data.filter((c) => c.id !== user?.id && c.email !== user?.email);
+        setContacts(filtered);
+        if (!activeContact && filtered.length > 0) {
+          setActiveContact(filtered[0]);
         }
-      } catch {
-        setContacts(DEFAULT_TEAMMATES.filter((c) => c.email !== user?.email));
-        if (!activeContact) setActiveContact(DEFAULT_TEAMMATES[0]);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch office contacts:', err);
+    } finally {
+      setFetchingContacts(false);
+    }
+  };
 
+  useEffect(() => {
     if (open) {
       fetchContacts();
     }
@@ -78,32 +56,32 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
     }
   }, [initialContact]);
 
-  // Load message thread with active contact
+  // Load message thread with active contact and poll for incoming messages
   useEffect(() => {
+    if (!open || !activeContact?.id) return;
+
+    let isSubscribed = true;
+
     const fetchDMs = async () => {
-      if (!activeContact) return;
       try {
         const dms = await chatApi.getDirectMessages(activeContact.id);
-        setMessages(dms);
-      } catch {
-        // Fallback demo thread
-        setMessages([
-          {
-            id: 'dm-1',
-            sender_id: activeContact.id,
-            sender_name: activeContact.name,
-            text: `Hey ${user?.name?.split(' ')[0] || 'there'}! Are you available to sync on the roadmap?`,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            is_direct: true,
-          },
-        ]);
+        if (isSubscribed) {
+          setMessages(dms);
+        }
+      } catch (err) {
+        console.error('Failed to fetch direct messages:', err);
       }
     };
 
-    if (open && activeContact) {
-      fetchDMs();
-    }
-  }, [open, activeContact, user]);
+    fetchDMs();
+    // Live polling every 3 seconds while drawer is open
+    const interval = setInterval(fetchDMs, 3000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [open, activeContact?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -111,46 +89,23 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeContact) return;
+    if (!text || !activeContact?.id) return;
 
     setInputText('');
     setLoading(true);
 
     try {
-      try {
-        const newMsg = await chatApi.sendDirectMessage(activeContact.id, text);
-        setMessages((prev) => [...prev, newMsg]);
-      } catch {
-        const localMsg: Message = {
-          id: `dm-${Date.now()}`,
-          sender_id: user?.id || 'me',
-          sender_name: user?.name || 'You',
-          recipient_id: activeContact.id,
-          text: text,
-          timestamp: new Date().toISOString(),
-          is_direct: true,
-        };
-        setMessages((prev) => [...prev, localMsg]);
-
-        // Demo response after 2.5s
-        setTimeout(() => {
-          const reply: Message = {
-            id: `reply-${Date.now()}`,
-            sender_id: activeContact.id,
-            sender_name: activeContact.name,
-            text: 'Got it, let me check and get back to you in 5 minutes!',
-            timestamp: new Date().toISOString(),
-            is_direct: true,
-          };
-          setMessages((prev) => [...prev, reply]);
-        }, 2200);
-      }
+      const newMsg = await chatApi.sendDirectMessage(activeContact.id, text);
+      setMessages((prev) => [...prev, newMsg]);
+    } catch (err) {
+      console.error('Failed to send direct message:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatTime = (ts: string) => {
+  const formatTime = (ts?: string) => {
+    if (!ts) return '';
     try {
       return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
@@ -169,7 +124,7 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
       placement="right"
       onClose={onClose}
       open={open}
-      width={440}
+      width={460}
       styles={{
         body: { padding: 0, display: 'flex', height: '100%', overflow: 'hidden' },
       }}
@@ -177,7 +132,7 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
       {/* Left Teammates List */}
       <div
         style={{
-          width: 140,
+          width: 150,
           borderRight: '1px solid #e2e8f0',
           background: '#f8fafc',
           display: 'flex',
@@ -185,55 +140,72 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
           overflowY: 'auto',
         }}
       >
-        <div style={{ padding: '12px 10px', fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-          TEAMMATES
+        <div
+          style={{
+            padding: '12px 10px',
+            fontSize: 11,
+            fontWeight: 700,
+            color: '#64748b',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>TEAMMATES</span>
+          {fetchingContacts && <SyncOutlined spin style={{ fontSize: 10 }} />}
         </div>
-        <List
-          dataSource={contacts}
-          renderItem={(contact) => {
-            const isSelected = activeContact?.id === contact.id;
-            return (
-              <div
-                key={contact.id}
-                onClick={() => setActiveContact(contact)}
-                style={{
-                  padding: '10px 10px',
-                  cursor: 'pointer',
-                  backgroundColor: isSelected ? '#e0f2fe' : 'transparent',
-                  borderLeft: isSelected ? '3px solid #0284c7' : '3px solid transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  transition: 'background-color 0.15s',
-                }}
-              >
-                <Badge
-                  status={contact.status === 'online' ? 'success' : 'warning'}
-                  dot
-                  offset={[-2, 22]}
+        {contacts.length === 0 ? (
+          <div style={{ padding: '20px 10px', textAlign: 'center', fontSize: 11, color: '#94a3b8' }}>
+            No other teammates online
+          </div>
+        ) : (
+          <List
+            dataSource={contacts}
+            renderItem={(contact) => {
+              const isSelected = activeContact?.id === contact.id;
+              return (
+                <div
+                  key={contact.id}
+                  onClick={() => setActiveContact(contact)}
+                  style={{
+                    padding: '10px 10px',
+                    cursor: 'pointer',
+                    backgroundColor: isSelected ? '#e0f2fe' : 'transparent',
+                    borderLeft: isSelected ? '3px solid #0284c7' : '3px solid transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    transition: 'background-color 0.15s',
+                  }}
                 >
-                  <Avatar size={28} style={{ backgroundColor: '#1677ff', fontSize: 12 }}>
-                    {contact.name[0]}
-                  </Avatar>
-                </Badge>
-                <div style={{ overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: isSelected ? 600 : 500,
-                      color: '#0f172a',
-                      whiteSpace: 'nowrap',
-                      textOverflow: 'ellipsis',
-                      overflow: 'hidden',
-                    }}
+                  <Badge
+                    status={contact.status === 'online' ? 'success' : 'warning'}
+                    dot
+                    offset={[-2, 22]}
                   >
-                    {contact.name.split(' ')[0]}
+                    <Avatar size={28} style={{ backgroundColor: '#1677ff', fontSize: 12 }}>
+                      {contact.name ? contact.name[0].toUpperCase() : 'U'}
+                    </Avatar>
+                  </Badge>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: isSelected ? 600 : 500,
+                        color: '#0f172a',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {contact.name || contact.email.split('@')[0]}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          }}
-        />
+              );
+            }}
+          />
+        )}
       </div>
 
       {/* Right Chat Thread */}
@@ -259,7 +231,9 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
               }}
             >
               <Space>
-                <Avatar style={{ backgroundColor: '#722ed1' }}>{activeContact.name[0]}</Avatar>
+                <Avatar style={{ backgroundColor: '#722ed1' }}>
+                  {activeContact.name ? activeContact.name[0].toUpperCase() : 'U'}
+                </Avatar>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{activeContact.name}</div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>
@@ -283,38 +257,43 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
                 gap: 12,
               }}
             >
-              {messages.map((msg) => {
-                const isMe = msg.sender_id === user?.id || msg.sender_name === user?.name || msg.sender_name === 'You';
-                return (
-                  <div
-                    key={msg.id}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: isMe ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%',
-                      alignSelf: isMe ? 'flex-end' : 'flex-start',
-                    }}
-                  >
+              {messages.length === 0 ? (
+                <Empty description="No messages yet. Send a message to start the conversation!" style={{ margin: 'auto' }} />
+              ) : (
+                messages.map((msg) => {
+                  const isMe = msg.sender_id === user?.id || msg.sender_name === user?.name;
+                  const timeStr = msg.timestamp || (msg as any).created_at;
+                  return (
                     <div
+                      key={msg.id}
                       style={{
-                        padding: '9px 13px',
-                        borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                        backgroundColor: isMe ? '#1677ff' : '#f1f5f9',
-                        color: isMe ? '#ffffff' : '#0f172a',
-                        fontSize: 13,
-                        lineHeight: 1.4,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: isMe ? 'flex-end' : 'flex-start',
+                        maxWidth: '85%',
+                        alignSelf: isMe ? 'flex-end' : 'flex-start',
                       }}
                     >
-                      {msg.text}
+                      <div
+                        style={{
+                          padding: '9px 13px',
+                          borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                          backgroundColor: isMe ? '#1677ff' : '#f1f5f9',
+                          color: isMe ? '#ffffff' : '#0f172a',
+                          fontSize: 13,
+                          lineHeight: 1.4,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        }}
+                      >
+                        {msg.text}
+                      </div>
+                      <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>
+                        {formatTime(timeStr)}
+                      </span>
                     </div>
-                    <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>
-                      {formatTime(msg.timestamp)}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -328,7 +307,7 @@ export const DirectChatDrawer: React.FC<DirectChatDrawerProps> = ({
               }}
             >
               <Input
-                placeholder={`Message ${activeContact.name.split(' ')[0]}...`}
+                placeholder={`Message ${activeContact.name?.split(' ')[0] || 'teammate'}...`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onPressEnter={handleSend}

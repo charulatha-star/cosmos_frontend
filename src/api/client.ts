@@ -26,9 +26,14 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only log, do not force-redirect on background api checks
+    // Clean up expired or invalid token if backend returns 401
     if (error.response?.status === 401) {
       console.warn('API 401 Unauthorized:', error.config?.url);
+      const url = error.config?.url || '';
+      if (!url.includes('/auth/login') && !url.includes('/auth/google')) {
+        localStorage.removeItem('cosmos_token');
+        localStorage.removeItem('cosmos_user');
+      }
     }
     return Promise.reject(error);
   }
