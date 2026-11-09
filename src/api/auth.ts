@@ -7,9 +7,9 @@ export interface LoginCredentials {
 }
 
 export const authApi = {
-  // Google One-Click Login (Matches real Cosmos Video)
-  loginWithGoogle: async (email: string = 'kuma1412002@gmail.com', name: string = 'Guest 470'): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/google/', { email, name });
+  // Google Sign-in with email and password
+  loginWithGoogle: async (email: string, password?: string, name?: string): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/google/', { email, password, name });
     return response.data;
   },
 

@@ -1,26 +1,13 @@
 import React, { useState } from 'react';
-import { Button, Card, Typography, Space, Input, Divider } from 'antd';
+import { Button, Card, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import GoogleSignInModal from '../components/GoogleSignInModal';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState<string>('kuma1412002@gmail.com');
-  const [name, setName] = useState<string>('Guest 470');
-  const [loading, setLoading] = useState<boolean>(false);
-  const { loginWithGoogle } = useAuth();
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState<boolean>(false);
   const navigate = useNavigate();
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      await loginWithGoogle(email, name);
-      navigate('/dashboard', { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div
@@ -64,14 +51,14 @@ export const Login: React.FC = () => {
           borderRadius: 16,
           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
           border: '1px solid #e2e8f0',
-          padding: '16px 8px',
+          padding: '24px 16px',
           textAlign: 'center',
         }}
       >
         <Title level={3} style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
           Sign in to Cosmos Video
         </Title>
-        <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 28, fontSize: 14 }}>
+        <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 32, fontSize: 14 }}>
           Enter your workspace and persistent virtual office
         </Paragraph>
 
@@ -80,10 +67,9 @@ export const Login: React.FC = () => {
           type="default"
           size="large"
           block
-          loading={loading}
-          onClick={handleGoogleLogin}
+          onClick={() => setIsGoogleModalOpen(true)}
           style={{
-            height: 50,
+            height: 52,
             borderRadius: 10,
             display: 'flex',
             alignItems: 'center',
@@ -94,7 +80,7 @@ export const Login: React.FC = () => {
             color: '#1e293b',
             border: '1px solid #cbd5e1',
             boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            marginBottom: 20,
+            marginBottom: 24,
           }}
         >
           {/* Authentic Google Multi-color G Icon */}
@@ -119,36 +105,17 @@ export const Login: React.FC = () => {
           Continue with Google
         </Button>
 
-        <Divider style={{ margin: '16px 0', fontSize: 12, color: '#94a3b8' }}>
-          Customize Account (Optional)
-        </Divider>
-
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <div style={{ textAlign: 'left' }}>
-            <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Google Email</Text>
-            <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="yourname@gmail.com"
-              style={{ marginTop: 4, height: 40 }}
-            />
-          </div>
-
-          <div style={{ textAlign: 'left' }}>
-            <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Display Name</Text>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Guest 470"
-              style={{ marginTop: 4, height: 40 }}
-            />
-          </div>
-        </Space>
-
-        <div style={{ marginTop: 24, fontSize: 12, color: '#94a3b8' }}>
+        <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
           By continuing, you agree to Cosmos Terms of Service & Privacy Policy.
         </div>
       </Card>
+
+      {/* Google Sign In Modal */}
+      <GoogleSignInModal
+        open={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        onSuccess={() => navigate('/dashboard', { replace: true })}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, Input, Button, Avatar, Tag, Space, Empty } from 'antd';
 import { SendOutlined, UserOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
@@ -27,87 +27,55 @@ export const InRoomChatDrawer: React.FC<InRoomChatDrawerProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Load message history from backend
-  const fetchMessages = async () => {
-    try {
-      if (roomId) {
+  // Load message history from backend and poll every 3 seconds while open
+  useEffect(() => {
+    if (!open || !roomId) return;
+
+    let isSubscribed = true;
+
+    const fetchMessages = async () => {
+      try {
         const data = await chatApi.getRoomMessages(roomId);
-        if (data) {
+        if (isSubscribed && data) {
           setMessages(data);
         }
+      } catch (err) {
+        console.error('Failed to load room messages:', err);
       }
-    } catch {
-      // Backend not running or empty, keep local messages
-    }
-  };
+    };
 
-  useEffect(() => {
-    if (open && roomId) {
-      fetchMessages();
-    }
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
   }, [open, roomId]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Initial welcome message if no history
-  useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([
-        {
-          id: 'welcome-1',
-          sender_id: 'sys',
-          sender_name: 'Cosmos Office Bot',
-          text: `Welcome to the room chat! Messages sent here are stored and visible to all participants.`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    }
-  }, [roomId]);
-
   const handleSendMessage = async () => {
     const text = inputText.trim();
-    if (!text) return;
+    if (!text || !roomId) return;
 
     setSending(true);
     setInputText('');
 
     try {
-      try {
-        const newMsg = await chatApi.sendRoomMessage(roomId, text);
-        setMessages((prev) => [...prev, newMsg]);
-      } catch {
-        // Fallback local message if backend is offline
-        const localMsg: Message = {
-          id: `msg-${Date.now()}`,
-          room_id: roomId,
-          sender_id: user?.id || 'local-usr',
-          sender_name: user?.name || 'You',
-          text: text,
-          timestamp: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, localMsg]);
-
-        // Demo simulation: Teammate reply after 2 seconds
-        setTimeout(() => {
-          const colleagueReply: Message = {
-            id: `reply-${Date.now()}`,
-            room_id: roomId,
-            sender_id: 'c1',
-            sender_name: 'Charu Latha (Lead)',
-            text: 'Sounds great! I can hear and see the shared screen clearly.',
-            timestamp: new Date().toISOString(),
-          };
-          setMessages((prev) => [...prev, colleagueReply]);
-        }, 1800);
-      }
+      const newMsg = await chatApi.sendRoomMessage(roomId, text);
+      setMessages((prev) => [...prev, newMsg]);
+    } catch (err) {
+      console.error('Failed to send room message:', err);
     } finally {
       setSending(false);
     }
   };
 
-  const formatTime = (ts: string) => {
+  const formatTime = (ts?: string) => {
+    if (!ts) return '';
     try {
       const d = new Date(ts);
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -150,11 +118,12 @@ export const InRoomChatDrawer: React.FC<InRoomChatDrawerProps> = ({
         }}
       >
         {messages.length === 0 ? (
-          <Empty description="No messages yet in this room" style={{ margin: 'auto' }} />
+          <Empty description={<span style={{ color: '#94a3b8' }}>No messages yet in this room</span>} style={{ margin: 'auto' }} />
         ) : (
           messages.map((msg) => {
             const isMe = msg.sender_id === user?.id || msg.sender_name === user?.name || msg.sender_name === 'You';
             const isBot = msg.sender_id === 'sys';
+            const timeStr = msg.timestamp || (msg as any).created_at;
 
             if (isBot) {
               return (
@@ -201,14 +170,14 @@ export const InRoomChatDrawer: React.FC<InRoomChatDrawerProps> = ({
                       style={{ backgroundColor: '#722ed1', fontSize: 10 }}
                       icon={<UserOutlined />}
                     >
-                      {msg.sender_name[0]}
+                      {msg.sender_name ? msg.sender_name[0].toUpperCase() : 'U'}
                     </Avatar>
                   )}
                   <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
                     {isMe ? 'You' : msg.sender_name}
                   </span>
                   <span style={{ fontSize: 10, color: '#64748b' }}>
-                    <ClockCircleOutlined style={{ fontSize: 9 }} /> {formatTime(msg.timestamp)}
+                    <ClockCircleOutlined style={{ fontSize: 9 }} /> {formatTime(timeStr)}
                   </span>
                 </div>
 
