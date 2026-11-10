@@ -25,6 +25,16 @@ export interface SpaceItem {
   created_at?: string;
 }
 
+export interface SpaceMember {
+  id: number;
+  user_id: string;
+  name: string;
+  email: string;
+  user_role: UserRole;
+  role: 'admin' | 'member';
+  joined_at: string;
+}
+
 export type RoomType = 'permanent' | 'temporary';
 
 export interface Room {
@@ -96,6 +106,7 @@ export interface AuthTokens {
 export interface AuthResponse {
   tokens: AuthTokens;
   user: User;
+  is_guest?: boolean;
 }
 
 export interface LiveKitTokenResponse {
