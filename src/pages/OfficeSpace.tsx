@@ -33,6 +33,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { presenceApi } from '../api/presence';
 import DirectChatDrawer from '../components/DirectChatDrawer';
+import CameraOffOutlined from '../components/CameraOffIcon';
 import type { PresenceUpdate, User } from '../types';
 
 // Exact floor plan zones matching user's Screenshots 3 & 5
@@ -925,7 +926,7 @@ export const OfficeSpace: React.FC = () => {
               size="large"
               type={isCameraOff ? 'default' : 'primary'}
               danger={isCameraOff}
-              icon={isCameraOff ? <CloseCircleOutlined /> : <VideoCameraOutlined />}
+              icon={isCameraOff ? <CameraOffOutlined /> : <VideoCameraOutlined />}
               onClick={() => {
                 setIsCameraOff(!isCameraOff);
                 message.info(isCameraOff ? 'Camera turned on' : 'Camera turned off');
