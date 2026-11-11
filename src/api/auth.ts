@@ -19,6 +19,18 @@ export const authApi = {
     return response.data;
   },
 
+  // Guest Instant Entry (No Sign In)
+  guestLogin: async (name?: string, spaceId?: string): Promise<AuthResponse> => {
+    const response = await apiClient.post<AuthResponse>('/auth/guest-login/', { name, space_id: spaceId });
+    return response.data;
+  },
+
+  // Search registered users for member invites
+  searchUsers: async (q?: string): Promise<User[]> => {
+    const response = await apiClient.get<User[]>('/auth/users/', { params: { q } });
+    return response.data;
+  },
+
   // Fetch currently authenticated user profile
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get<User>('/auth/me/');

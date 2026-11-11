@@ -13,6 +13,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
+  // Allow external guests direct entry without sign in
+  const isGuestLink = location.search.includes('guest=true') || location.pathname.includes('/guest');
+  if (isGuestLink) {
+    return children;
+  }
+
   if (isLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -22,7 +28,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   }
 
   if (!isAuthenticated || !user) {
-    // Redirect unauthenticated users to login, preserving intended route
+    // Preserve full intended route including query params so after login they can join
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
