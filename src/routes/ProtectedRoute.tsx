@@ -13,12 +13,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  // Allow external guests direct entry without sign in
-  const isGuestLink = location.search.includes('guest=true') || location.pathname.includes('/guest');
-  if (isGuestLink) {
-    return children;
-  }
-
   if (isLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>

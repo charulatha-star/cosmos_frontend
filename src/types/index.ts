@@ -152,7 +152,6 @@ export interface AuthTokens {
 export interface AuthResponse {
   tokens: AuthTokens;
   user: User;
-  is_guest?: boolean;
 }
 
 export interface LiveKitTokenResponse {

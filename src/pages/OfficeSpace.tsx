@@ -1564,94 +1564,6 @@ export const OfficeSpace: React.FC = () => {
     };
   }, [currentSpace, user?.id]);
 
-  // Handle auto-joining via member link and instant guest entry
-  useEffect(() => {
-    const handleEntry = async () => {
-      // 1. If guest link and unauthenticated: log in as Guest automatically
-      if (isGuestQuery && (!user || user.role !== 'Guest')) {
-        try {
-          const guestUser = await loginAsGuest(undefined, currentSpace);
-          message.success(`Entered as ${guestUser.name}!`);
-        } catch {
-          // fallback
-        }
-      }
-
-      // 2. If member join link (?join=member) and user is logged in
-      const joinParam = searchParams.get('join');
-      if (joinParam === 'member' && user && user.role !== 'Guest') {
-        try {
-          const res = await spacesApi.joinSpace(currentSpace);
-          message.success(`You have joined ${res.space_name || currentSpace} as a member!`);
-        } catch {
-          // Already a member or error
-        }
-      }
-
-      // 3. Load space members for the invite modal
-      try {
-        const members = await spacesApi.getMembers(currentSpace);
-        setTeamMembers(members);
-      } catch {
-        // Space might be local
-      }
-    };
-
-    handleEntry();
-  }, [currentSpace, isGuestQuery, user, loginAsGuest, searchParams]);
-
-  // Initial avatar position when joined to a specific room/zone
-  useEffect(() => {
-    const targetRoom = searchParams.get('room');
-    if (targetRoom) {
-      if (targetRoom.toLowerCase().includes('cowork')) {
-        setMyPos({ x: 580, y: 320 });
-      } else if (targetRoom.toLowerCase().includes('stage')) {
-        setMyPos({ x: 800, y: 180 });
-      } else if (targetRoom.toLowerCase().includes('reception')) {
-        setMyPos({ x: 620, y: 480 });
-      } else if (targetRoom.toLowerCase().includes('meeting')) {
-        setMyPos({ x: 220, y: 180 });
-      }
-    }
-  }, [searchParams]);
-
-  // Handle guest leaving the space cleanly (Screenshot 4)
-  const handleGuestLeave = async () => {
-    try {
-      await presenceApi.updatePresence({
-        space: currentSpace,
-        status: 'offline',
-      });
-    } catch {}
-    setPresences((prev) => prev.filter((p) => p.user_id !== user?.id));
-    logout();
-    message.info('You have left the space.');
-    navigate('/login');
-  };
-
-  // Invite member by email or name (Screenshot 1)
-  const handleInviteMember = async () => {
-    if (!searchMemberQuery.trim()) return;
-    setInvitingMember(true);
-    try {
-      await spacesApi.inviteMember(currentSpace, { email: searchMemberQuery.trim(), role: 'member' });
-      message.success(`Invited ${searchMemberQuery.trim()} to ${currentSpace}!`);
-      setSearchMemberQuery('');
-      const updated = await spacesApi.getMembers(currentSpace);
-      setTeamMembers(updated);
-    } catch (err: any) {
-      message.error(err.response?.data?.detail || 'Failed to invite member.');
-    } finally {
-      setInvitingMember(false);
-    }
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    message.success(`${label} copied to clipboard!`);
-  };
-
   // Smooth walk animation towards targetPos
   useEffect(() => {
     if (!targetPos) {
@@ -2196,7 +2108,7 @@ export const OfficeSpace: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 16px',
+          padding: '0 20px',
           zIndex: 30,
         }}
       >
@@ -2234,9 +2146,7 @@ export const OfficeSpace: React.FC = () => {
                 width: 22,
                 height: 22,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 50%, #38bdf8 100%)',
-                boxShadow: '0 2px 6px rgba(244, 63, 94, 0.4)',
-                position: 'relative',
+                background: 'linear-gradient(135deg, #f43f5e 0%, #38bdf8 100%)',
               }}
             />
             <span>{spaceInfo?.name || currentSpace}</span>
@@ -2262,7 +2172,7 @@ export const OfficeSpace: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              padding: '5px 16px',
+              padding: '6px 18px',
               borderRadius: 20,
               backgroundColor: viewMode === 'space' ? '#ffffff' : 'transparent',
               color: viewMode === 'space' ? '#0f172a' : '#94a3b8',
@@ -2331,62 +2241,45 @@ export const OfficeSpace: React.FC = () => {
                 document.exitFullscreen().catch(() => {});
               }
             }}
-            title="Fullscreen"
           />
         </div>
       </header>
 
       {/* 2. BODY: LEFT SIDEBAR + MAIN CANVAS */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        {/* LEFT COLLAPSIBLE SIDEBAR (Matching Screenshots 1 & 2) */}
+        {/* LEFT COLLAPSIBLE SIDEBAR (Screenshots 3 & 5) */}
         <aside
           style={{
-            width: 240,
-            backgroundColor: '#f8f9fa',
+            width: 250,
+            backgroundColor: '#ffffff',
             color: '#1e293b',
-            borderRight: '1px solid #eef0f4',
+            borderRight: '1px solid #e2e8f0',
             display: 'flex',
             flexDirection: 'column',
             overflowY: 'auto',
-            padding: '14px 10px',
+            padding: '16px 12px',
             fontSize: 13,
-            userSelect: 'none',
-            flexShrink: 0,
           }}
         >
-          {/* 1. Search Box */}
+          {/* Quick Search */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '6px 12px',
-              backgroundColor: '#ffffff',
+              padding: '8px 12px',
+              backgroundColor: '#f8fafc',
               border: '1px solid #e2e8f0',
               borderRadius: 8,
               cursor: 'pointer',
-              marginBottom: 12,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+              marginBottom: 16,
             }}
-            onClick={() => message.info('Search spaces, messages or teammates (⌘ K)')}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <SearchOutlined style={{ color: '#64748b', fontSize: 14 }} />
-              <span style={{ color: '#94a3b8', fontSize: 13 }}>Search</span>
-            </div>
-            <span
-              style={{
-                fontSize: 11,
-                color: '#64748b',
-                fontWeight: 600,
-                backgroundColor: '#f1f5f9',
-                padding: '1px 6px',
-                borderRadius: 4,
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              ⌘ K
-            </span>
+            <Space size={8}>
+              <SearchOutlined style={{ color: '#94a3b8' }} />
+              <span style={{ color: '#94a3b8', fontSize: 12 }}>Search</span>
+            </Space>
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>⌘ K</span>
           </div>
 
           {/* Navigation Links */}
@@ -2404,368 +2297,31 @@ export const OfficeSpace: React.FC = () => {
             </div>
             <div
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                padding: '12px 14px',
-                marginBottom: 12,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                position: 'relative',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Unlock Premium Features</span>
-                <CloseOutlined
-                  onClick={() => setShowPremiumBanner(false)}
-                  style={{ fontSize: 11, color: '#94a3b8', cursor: 'pointer' }}
-                />
-              </div>
-              <p style={{ fontSize: 11.5, color: '#64748b', margin: '0 0 10px 0', lineHeight: 1.45 }}>
-                HD calls, 4K screen sharing & bigger video calls with a 14-day free trial!
-              </p>
-              <Button
-                type="primary"
-                size="small"
-                style={{
-                  backgroundColor: '#4f46e5',
-                  borderColor: '#4f46e5',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  height: 30,
-                  padding: '0 14px',
-                }}
-                onClick={() => message.info('Free trial started!')}
-              >
-                Start Trial
-              </Button>
-            </div>
-          )}
-
-          {/* 2. Top Navigation Links (Screenshot 1) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
-            {[
-              { id: 'activities', label: 'Activities', icon: <BellOutlined style={{ fontSize: 15 }} /> },
-              { id: 'past-chats', label: 'Past Meeting Chats', icon: <ClockCircleOutlined style={{ fontSize: 15 }} /> },
-              { id: 'replays', label: 'Replays', icon: <VideoCameraOutlined style={{ fontSize: 15 }} /> },
-              { id: 'calendar', label: "Today's Calendar", icon: <CalendarOutlined style={{ fontSize: 15 }} /> },
-            ].map((item) => {
-              const isActive = activeSidebarItem === item.id;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setActiveSidebarItem(item.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '7px 10px',
-                    borderRadius: 6,
-                    color: isActive ? '#0f172a' : '#475569',
-                    backgroundColor: isActive ? '#eef2f6' : 'transparent',
-                    fontWeight: isActive ? 600 : 500,
-                    cursor: 'pointer',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = '#f1f5f9';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <span style={{ color: '#475569', display: 'flex' }}>{item.icon}</span>
-                  <span style={{ fontSize: 13.5 }}>{item.label}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 3. Rooms Section (Screenshot 1) */}
-          <div style={{ marginTop: 8 }}>
-            <div
-              onClick={() => setRoomsExpanded(!roomsExpanded)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 6px',
-                color: '#334155',
-                fontSize: 13,
-                fontWeight: 700,
+                marginTop: 8,
+                padding: '6px 8px',
+                borderRadius: 6,
                 cursor: 'pointer',
-              }}
-            >
-              {roomsExpanded ? (
-                <CaretDownOutlined style={{ fontSize: 10, color: '#64748b' }} />
-              ) : (
-                <CaretRightOutlined style={{ fontSize: 10, color: '#64748b' }} />
-              )}
-              <span>Rooms</span>
-            </div>
-
-            {roomsExpanded && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
-                {/* Start New Call */}
-                <div
-                  onClick={() => message.info('Starting new call...')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '7px 10px',
-                    borderRadius: 6,
-                    color: '#475569',
-                    fontSize: 13.5,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
-                  <VideoCameraOutlined style={{ fontSize: 15, color: '#64748b' }} />
-                  <span>Start New Call</span>
-                </div>
-
-                {/* TV Room (Active room with green vertical indicator) */}
-                <div
-                  onClick={() => setActiveSidebarItem('tv-room')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '7px 10px',
-                    borderRadius: 6,
-                    backgroundColor: activeSidebarItem === 'tv-room' ? '#eef2f6' : 'transparent',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <div
-                      style={{
-                        width: 3.5,
-                        height: 16,
-                        backgroundColor: '#10b981',
-                        borderRadius: 2,
-                        marginRight: 8,
-                      }}
-                    />
-                    <DesktopOutlined style={{ fontSize: 15, color: '#334155', marginRight: 8 }} />
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: '#1e293b' }}>TV Room</span>
-                  </div>
-                  <Avatar
-                    size={20}
-                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Guest 552'}`}
-                    style={{ border: '1.5px solid #ffffff' }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 4. Channels Section (Screenshots 1 & 2) */}
-          <div style={{ marginTop: 12 }}>
-            <div
-              style={{
+                color: '#2563eb',
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 6px',
-                color: '#334155',
-                fontSize: 13,
-                fontWeight: 700,
+                gap: 6,
               }}
+              onClick={() => navigate('/room/instant-huddle')}
             >
-              <div
-                onClick={() => setChannelsExpanded(!channelsExpanded)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-              >
-                {channelsExpanded ? (
-                  <CaretDownOutlined style={{ fontSize: 10, color: '#64748b' }} />
-                ) : (
-                  <CaretRightOutlined style={{ fontSize: 10, color: '#64748b' }} />
-                )}
-                <span>Channels</span>
-              </div>
-              <Button
-                type="text"
-                size="small"
-                icon={<PlusOutlined style={{ fontSize: 11, color: '#475569' }} />}
-                onClick={() => message.info('Create channel modal')}
-                style={{ width: 22, height: 22, minWidth: 22, padding: 0 }}
-              />
+              <VideoCameraOutlined /> Start New Call
             </div>
-
-            {channelsExpanded && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 }}>
-                {/* Threads */}
-                <div
-                  onClick={() => {
-                    setActiveSidebarItem('threads');
-                    setIsChatOpen(true);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '6px 10px',
-                    borderRadius: 6,
-                    color: activeSidebarItem === 'threads' ? '#0f172a' : '#475569',
-                    backgroundColor: activeSidebarItem === 'threads' ? '#eef2f6' : 'transparent',
-                    fontSize: 13.5,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (activeSidebarItem !== 'threads') e.currentTarget.style.backgroundColor = '#f1f5f9';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeSidebarItem !== 'threads') e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <MessageOutlined style={{ fontSize: 14, color: '#64748b' }} />
-                  <span>Threads</span>
-                </div>
-
-                {/* Channel List from Screenshots 1 & 2 */}
-                {[
-                  'announcements',
-                  'billionmedia',
-                  'general',
-                  'introductions',
-                  'random',
-                  'welcome',
-                ].map((channelName) => {
-                  const channelId = `ch-${channelName}`;
-                  const isActive = activeSidebarItem === channelId;
-                  return (
-                    <div
-                      key={channelId}
-                      onClick={() => setActiveSidebarItem(channelId)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '6px 10px',
-                        borderRadius: 6,
-                        color: isActive ? '#0f172a' : '#475569',
-                        backgroundColor: isActive ? '#eef2f6' : 'transparent',
-                        fontSize: 13.5,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = '#f1f5f9';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8', width: 14, textAlign: 'center' }}>
-                        #
-                      </span>
-                      <span>{channelName}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
-          {/* 5. Team Section (Screenshot 2) */}
-          <div style={{ marginTop: 12 }}>
-            <div
-              onClick={() => setTeamExpanded(!teamExpanded)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 6px',
-                color: '#334155',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              {teamExpanded ? (
-                <CaretDownOutlined style={{ fontSize: 10, color: '#64748b' }} />
-              ) : (
-                <CaretRightOutlined style={{ fontSize: 10, color: '#64748b' }} />
-              )}
-              <span>Team</span>
+          {/* Channels */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+              Channels
             </div>
-
-            {teamExpanded && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '6px 8px',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #f1f5f9',
-                  }}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <Avatar
-                      size={30}
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Guest 552'}`}
-                      style={{ backgroundColor: '#1e293b' }}
-                    />
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: -1,
-                        right: -1,
-                        width: 9,
-                        height: 9,
-                        borderRadius: '50%',
-                        backgroundColor: '#f59e0b',
-                        border: '1.5px solid #ffffff',
-                      }}
-                    />
-                  </div>
-                  <div style={{ lineHeight: 1.25, overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                        {user?.name || 'Guest 552'}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>(me)</span>
-                      <GlobalOutlined style={{ fontSize: 11, color: '#94a3b8' }} />
-                    </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                      {activeZone || 'TV Room'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 6. Offline Section (Screenshot 2) */}
-          <div style={{ marginTop: 12, marginBottom: 16 }}>
-            <div
-              onClick={() => setOfflineExpanded(!offlineExpanded)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 6px',
-                color: '#64748b',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              {offlineExpanded ? (
-                <CaretDownOutlined style={{ fontSize: 10, color: '#94a3b8' }} />
-              ) : (
-                <CaretRightOutlined style={{ fontSize: 10, color: '#94a3b8' }} />
-              )}
-              <span>Offline</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, color: '#475569' }}>
+              <div style={{ cursor: 'pointer' }}># announcements</div>
+              <div style={{ cursor: 'pointer' }}># general</div>
+              <div style={{ cursor: 'pointer' }}># introductions</div>
             </div>
           </div>
         </aside>
@@ -3711,7 +3267,6 @@ export const OfficeSpace: React.FC = () => {
                   border: '1px solid #e2e8f0',
                 }}
               >
-                {/* 1. Recenter Button */}
                 <Tooltip title="Recenter Avatar" placement="left">
                   <div
                     onClick={() => {

@@ -10,11 +10,6 @@ import {
   Avatar,
   Typography,
   message,
-  Spin,
-  Empty,
-  Table,
-  Space as AntSpace,
-  Popconfirm,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -22,9 +17,6 @@ import {
   LogoutOutlined,
   DownOutlined,
   TeamOutlined,
-  CopyOutlined,
-  UserAddOutlined,
-  DeleteOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -44,27 +36,7 @@ export const Dashboard: React.FC = () => {
   const [createLoading, setCreateLoading] = useState<boolean>(false);
   const [form] = Form.useForm();
 
-  // Manage Team Modal State
-  const [manageTeamModalOpen, setManageTeamModalOpen] = useState<boolean>(false);
-  const [selectedSpace, setSelectedSpace] = useState<SpaceItem | null>(null);
-  const [teamMembers, setTeamMembers] = useState<SpaceMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState<boolean>(false);
-  const [inviteEmail, setInviteEmail] = useState<string>('');
-  const [invitingMember, setInvitingMember] = useState<boolean>(false);
-
-  // Load spaces from backend
-  const fetchSpaces = async () => {
-    setLoadingSpaces(true);
-    try {
-      const data = await spacesApi.getSpaces();
-      setSpaces(data || []);
-    } catch {
-      setSpaces([]);
-    } finally {
-      setLoadingSpaces(false);
-    }
-  };
-
+  // Load spaces from backend if running
   useEffect(() => {
     const fetchSpaces = async () => {
       try {
@@ -85,19 +57,19 @@ export const Dashboard: React.FC = () => {
 
       try {
         const newSpace = await spacesApi.createSpace(values.name);
-        setSpaces((prev) => [newSpace, ...prev]);
-        message.success(`Space "${values.name}" created!`);
+        setSpaces((prev) => [...prev, newSpace]);
       } catch {
+        // Local fallback
         const localSpace: SpaceItem = {
           id: values.name.toLowerCase().replace(/\s+/g, '-'),
           name: values.name,
           admin_access: true,
           is_free: true,
         };
-        setSpaces((prev) => [localSpace, ...prev]);
-        message.success(`Space "${values.name}" created!`);
+        setSpaces((prev) => [...prev, localSpace]);
       }
 
+      message.success(`Space "${values.name}" created!`);
       setIsModalOpen(false);
       form.resetFields();
     } catch {
@@ -111,55 +83,6 @@ export const Dashboard: React.FC = () => {
     navigate(`/v/${spaceId}/office`);
   };
 
-  // Open Manage Team Modal
-  const handleOpenManageTeam = async (sp: SpaceItem) => {
-    setSelectedSpace(sp);
-    setManageTeamModalOpen(true);
-    setLoadingMembers(true);
-    try {
-      const members = await spacesApi.getMembers(sp.id);
-      setTeamMembers(members);
-    } catch {
-      message.error('Could not load team members.');
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  // Invite member by email
-  const handleInviteMember = async () => {
-    if (!selectedSpace || !inviteEmail.trim()) return;
-    setInvitingMember(true);
-    try {
-      await spacesApi.inviteMember(selectedSpace.id, { email: inviteEmail.trim(), role: 'member' });
-      message.success(`Invited ${inviteEmail} to ${selectedSpace.name}!`);
-      setInviteEmail('');
-      const updated = await spacesApi.getMembers(selectedSpace.id);
-      setTeamMembers(updated);
-    } catch (err: any) {
-      message.error(err.response?.data?.detail || 'Failed to invite member.');
-    } finally {
-      setInvitingMember(false);
-    }
-  };
-
-  // Remove member
-  const handleRemoveMember = async (memberUserId: string) => {
-    if (!selectedSpace) return;
-    try {
-      await spacesApi.removeMember(selectedSpace.id, memberUserId);
-      message.success('Member removed from team.');
-      setTeamMembers((prev) => prev.filter((m) => m.user_id !== memberUserId));
-    } catch (err: any) {
-      message.error(err.response?.data?.detail || 'Failed to remove member.');
-    }
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    message.success(`${label} copied to clipboard!`);
-  };
-
   const filteredSpaces = spaces.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -170,8 +93,8 @@ export const Dashboard: React.FC = () => {
       disabled: true,
       label: (
         <div>
-          <div style={{ fontWeight: 600 }}>{user?.name || 'Guest'}</div>
-          <div style={{ fontSize: 12, color: '#888' }}>{user?.email || ''}</div>
+          <div style={{ fontWeight: 600 }}>{user?.name || 'Guest 470'}</div>
+          <div style={{ fontSize: 12, color: '#888' }}>{user?.email || 'kuma1412002@gmail.com'}</div>
         </div>
       ),
     },
@@ -198,7 +121,7 @@ export const Dashboard: React.FC = () => {
         fontFamily: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
       }}
     >
-      {/* Top Navbar matching Cosmos Screenshot 5 */}
+      {/* Top Navbar matching Screenshots 1 & 2 */}
       <header
         style={{
           height: 64,
@@ -267,7 +190,7 @@ export const Dashboard: React.FC = () => {
         </div>
         */}
 
-        {/* Right: User Profile Dropdown */}
+        {/* Right: User Profile Dropdown matching screenshot */}
         <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
           <div
             style={{
@@ -287,10 +210,10 @@ export const Dashboard: React.FC = () => {
             />
             <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
-                {user?.name || 'Guest'}
+                {user?.name || 'Guest 470'}
               </div>
               <div style={{ fontSize: 10, color: '#64748b' }}>
-                {user?.email || 'guest@cosmos.local'}
+                {user?.email || 'kuma1412002@gmail.com'}
               </div>
             </div>
             <DownOutlined style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }} />
@@ -303,10 +226,10 @@ export const Dashboard: React.FC = () => {
         {/* Welcome Header */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <Title level={2} style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 32 }}>
-            Welcome {user?.name || 'Guest'}!
+            Welcome {user?.name || 'Guest 470'}!
           </Title>
           <Text style={{ fontSize: 15, color: '#64748b', display: 'block', marginTop: 8 }}>
-            Your spaces for {user?.email || ''}
+            Your spaces for {user?.email || 'kuma1412002@gmail.com'}
           </Text>
 
           {/* Search Space Input */}
@@ -469,7 +392,7 @@ export const Dashboard: React.FC = () => {
         )}
 
 
-        {/* Create New Space Box (Matching Screenshot 5) */}
+        {/* Create New Space Box (Matching Screenshot 2) */}
         <div
           style={{
             marginTop: 56,
@@ -521,168 +444,6 @@ export const Dashboard: React.FC = () => {
             <Input placeholder="e.g. Billiontags_Team or Engineering" size="large" />
           </Form.Item>
         </Form>
-      </Modal>
-
-      {/* Manage Team Modal (for Space Admins) */}
-      <Modal
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <TeamOutlined style={{ color: '#3b82f6' }} />
-            <span>Manage Team — {selectedSpace?.name}</span>
-          </div>
-        }
-        open={manageTeamModalOpen}
-        onCancel={() => setManageTeamModalOpen(false)}
-        footer={null}
-        width={680}
-      >
-        {selectedSpace && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 }}>
-            {/* Quick Share Links */}
-            <div
-              style={{
-                backgroundColor: '#f8fafc',
-                borderRadius: 8,
-                padding: '12px 16px',
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-                Shareable Space Links
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>
-                    <b>Member Invite Link:</b> Permanent access to this space
-                  </Text>
-                  <Button
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={() =>
-                      copyToClipboard(
-                        `${window.location.origin}/v/${selectedSpace.id}/office?join=member`,
-                        'Member Invite Link'
-                      )
-                    }
-                  >
-                    Copy
-                  </Button>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>
-                    <b>External Guest Link:</b> Instant access without sign-in
-                  </Text>
-                  <Button
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={() =>
-                      copyToClipboard(
-                        `${window.location.origin}/v/${selectedSpace.id}/office?guest=true`,
-                        'Guest Link'
-                      )
-                    }
-                  >
-                    Copy
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Invite new member input */}
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Invite Member by Email
-              </div>
-              <AntSpace.Compact style={{ width: '100%' }}>
-                <Input
-                  placeholder="colleague@billiontags.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  onPressEnter={handleInviteMember}
-                />
-                <Button
-                  type="primary"
-                  icon={<UserAddOutlined />}
-                  loading={invitingMember}
-                  onClick={handleInviteMember}
-                  style={{ backgroundColor: '#1e293b', borderColor: '#1e293b' }}
-                >
-                  Invite
-                </Button>
-              </AntSpace.Compact>
-            </div>
-
-            {/* Current Members List Table */}
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-                Current Team Members ({teamMembers.length})
-              </div>
-              <Table
-                dataSource={teamMembers}
-                rowKey="id"
-                loading={loadingMembers}
-                pagination={false}
-                size="small"
-                columns={[
-                  {
-                    title: 'Member',
-                    key: 'member',
-                    render: (_, record) => (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Avatar
-                          size={28}
-                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${record.name}`}
-                          style={{ backgroundColor: '#0f172a' }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 13 }}>{record.name}</div>
-                          <div style={{ fontSize: 11, color: '#64748b' }}>{record.email}</div>
-                        </div>
-                      </div>
-                    ),
-                  },
-                  {
-                    title: 'Role',
-                    dataIndex: 'role',
-                    key: 'role',
-                    render: (role) => (
-                      <Tag color={role === 'admin' ? 'blue' : 'default'} style={{ borderRadius: 8 }}>
-                        {role === 'admin' ? 'Admin' : 'Member'}
-                      </Tag>
-                    ),
-                  },
-                  {
-                    title: 'Action',
-                    key: 'action',
-                    width: 80,
-                    render: (_, record) => {
-                      const isSelf = record.user_id === user?.id;
-                      return (
-                        <Popconfirm
-                          title="Remove member"
-                          description={`Remove ${record.name} from this space?`}
-                          onConfirm={() => handleRemoveMember(record.user_id)}
-                          okText="Yes, remove"
-                          cancelText="Cancel"
-                          disabled={isSelf}
-                        >
-                          <Button
-                            type="text"
-                            danger
-                            icon={<DeleteOutlined />}
-                            size="small"
-                            disabled={isSelf}
-                            title={isSelf ? 'Cannot remove yourself' : 'Remove member'}
-                          />
-                        </Popconfirm>
-                      );
-                    },
-                  },
-                ]}
-              />
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   );
