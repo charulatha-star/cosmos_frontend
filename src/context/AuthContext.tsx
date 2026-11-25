@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { User, UserRole, AuthTokens } from '../types';
+import type { User, AuthTokens } from '../types';
 import { authApi } from '../api/auth';
 
 interface AuthContextType {
@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<void>;
   loginWithGoogle: (email: string, password?: string, name?: string) => Promise<void>;
-  loginAsMock: (role: UserRole) => void;
+  loginAsGuest: (name?: string, spaceId?: string) => Promise<User>;
   logout: () => void;
   updateUser: (updatedData: Partial<User>) => void;
   setGuestSession: (tokens: AuthTokens, userData: User) => void;
@@ -33,7 +33,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const storedUser = localStorage.getItem(USER_KEY);
 
         if (storedToken && storedUser) {
-          // If it's a legacy mock token, clean it immediately
           if (storedToken.startsWith('google-jwt-') || storedToken.startsWith('mock-')) {
             localStorage.removeItem(TOKEN_KEY);
             localStorage.removeItem(USER_KEY);
@@ -115,37 +114,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Mock Login helper to test roles
-  const loginAsMock = (role: UserRole) => {
-    const mockUsers: Record<UserRole, User> = {
-      Admin: {
-        id: 'usr-guest-470',
-        name: 'Guest 470',
-        email: 'kuma1412002@gmail.com',
-        role: 'Admin',
-        status: 'online',
-      },
-      Employee: {
-        id: 'usr-emp-002',
-        name: 'Alex Rivera (Engineer)',
-        email: 'alex.rivera@billiontags.com',
-        role: 'Employee',
-        status: 'online',
-      },
-      Guest: {
-        id: 'usr-gst-003',
-        name: 'Guest Client',
-        email: 'guest@external.com',
+  // Instant Guest Entry (No Sign In)
+  const loginAsGuest = async (name?: string, spaceId?: string): Promise<User> => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.guestLogin(name, spaceId);
+      saveSession(response.tokens, response.user);
+      return response.user;
+    } catch (error) {
+      const guestName = name || `Guest ${Math.floor(100 + Math.random() * 900)}`;
+      const localGuestUser: User = {
+        id: `guest-${Date.now()}`,
+        name: guestName,
+        email: `${guestName.toLowerCase().replace(/\s+/g, '')}@guest.cosmos.local`,
         role: 'Guest',
         status: 'online',
-      },
-    };
-
-    const mockTokens: AuthTokens = {
-      access: `mock-jwt-token-for-${role.toLowerCase()}`,
-    };
-
-    saveSession(mockTokens, mockUsers[role]);
+      };
+      const localTokens: AuthTokens = { access: `local-guest-${Date.now()}` };
+      saveSession(localTokens, localGuestUser);
+      return localGuestUser;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
@@ -178,7 +168,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoading,
         login,
         loginWithGoogle,
-        loginAsMock,
+        loginAsGuest,
         logout,
         updateUser,
         setGuestSession,

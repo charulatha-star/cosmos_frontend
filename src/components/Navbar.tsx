@@ -7,7 +7,6 @@ import {
   VideoCameraOutlined,
   CalendarOutlined,
   SettingOutlined,
-  SwapOutlined,
   MessageOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,7 +17,7 @@ import type { UserRole } from '../types';
 const { Header } = Layout;
 
 export const Navbar: React.FC = () => {
-  const { user, logout, loginAsMock } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isDMsOpen, setIsDMsOpen] = useState<boolean>(false);
@@ -64,29 +63,6 @@ export const Navbar: React.FC = () => {
           <div style={{ fontSize: 12, color: '#888' }}>{user.email}</div>
         </div>
       ),
-    },
-    { type: 'divider' },
-    {
-      key: 'switch-role',
-      icon: <SwapOutlined />,
-      label: 'Switch Test Role (Dev)',
-      children: [
-        {
-          key: 'switch-admin',
-          label: 'Admin (Sarah Connor)',
-          onClick: () => loginAsMock('Admin'),
-        },
-        {
-          key: 'switch-employee',
-          label: 'Employee (Alex Rivera)',
-          onClick: () => loginAsMock('Employee'),
-        },
-        {
-          key: 'switch-guest',
-          label: 'Guest (External Client)',
-          onClick: () => loginAsMock('Guest'),
-        },
-      ],
     },
     { type: 'divider' },
     {
