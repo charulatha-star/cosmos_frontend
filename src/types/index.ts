@@ -13,6 +13,17 @@ export interface User {
   role: UserRole;
   status: UserPresenceStatus;
   avatar_url?: string;
+  avatar_seed?: string;
+  avatar_style?: string;
+  custom_status?: string;
+  status_mode?: 'Available' | 'Listening' | 'Focus' | 'Away';
+  country?: string;
+  city?: string;
+  time_zone?: string;
+  language?: string;
+  community_groups?: string;
+  about?: string;
+  interests?: string;
   current_room_id?: string | null;
   current_space?: string;
 }
@@ -22,7 +33,50 @@ export interface SpaceItem {
   name: string;
   admin_access: boolean;
   is_free: boolean;
+  team_size?: string;
+  style?: string;
+  allow_link_join?: boolean;
+  invite_code?: string;
+  members_count?: number;
+  user_role?: SpaceRole;
+  is_admin?: boolean;
   created_at?: string;
+}
+
+export type SpaceRole = 'Owner' | 'Admin' | 'Member' | 'Guest';
+
+export interface SpaceMemberItem {
+  id: string;
+  space: string;
+  user?: string;
+  name: string;
+  email?: string | null;
+  guest_name?: string | null;
+  role: SpaceRole;
+  access: 'all_offices' | 'specific_room';
+  created_at?: string;
+}
+
+export interface SpaceInvitationItem {
+  id: string;
+  space: string;
+  space_name?: string;
+  email: string;
+  role: 'Admin' | 'Member';
+  token: string;
+  invited_by?: string;
+  invited_by_name?: string;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  expires_at?: string;
+  created_at: string;
+}
+
+
+export interface SpaceSetupPayload {
+  name: string;
+  team_size: string;
+  style: string;
+  emails?: string[];
 }
 
 export type RoomType = 'permanent' | 'temporary';
@@ -85,6 +139,8 @@ export interface PresenceUpdate {
   current_desk?: string | null;
   x?: number;
   y?: number;
+  is_camera_on?: boolean;
+  is_muted?: boolean;
   updated_at?: string;
 }
 

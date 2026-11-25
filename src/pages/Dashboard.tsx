@@ -21,6 +21,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { spacesApi } from '../api/spaces';
+import { getAvatarUrl } from '../components/CosmosProfileStatusModal';
 import type { SpaceItem } from '../types';
 
 const { Title, Text } = Typography;
@@ -29,14 +30,7 @@ export const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [spaces, setSpaces] = useState<SpaceItem[]>([
-    {
-      id: 'billion',
-      name: 'billion',
-      admin_access: true,
-      is_free: true,
-    },
-  ]);
+  const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [createLoading, setCreateLoading] = useState<boolean>(false);
@@ -47,15 +41,14 @@ export const Dashboard: React.FC = () => {
     const fetchSpaces = async () => {
       try {
         const data = await spacesApi.getSpaces();
-        if (data && data.length > 0) {
-          setSpaces(data);
-        }
+        setSpaces(data || []);
       } catch {
-        // Backend offline, retain default
+        setSpaces([]);
       }
     };
     fetchSpaces();
   }, []);
+
 
   const handleCreateSpace = async () => {
     try {
@@ -180,7 +173,7 @@ export const Dashboard: React.FC = () => {
           </Tag>
         </div>
 
-        {/* Center: Marketing Links */}
+        {/* Center: Marketing Links (Commented out per user request)
         <div style={{ display: 'flex', gap: 28 }}>
           <span style={{ color: '#64748b', fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
             Solutions
@@ -195,6 +188,7 @@ export const Dashboard: React.FC = () => {
             Resources
           </span>
         </div>
+        */}
 
         {/* Right: User Profile Dropdown matching screenshot */}
         <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
@@ -210,9 +204,9 @@ export const Dashboard: React.FC = () => {
             }}
           >
             <Avatar
-              size={30}
-              src="https://api.dicebear.com/7.x/bottts/svg?seed=Guest470"
-              style={{ backgroundColor: '#1e293b' }}
+              size={32}
+              src={getAvatarUrl(user)}
+              style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1' }}
             />
             <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
@@ -257,120 +251,146 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Space Cards List (Matching Screenshot 1) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {filteredSpaces.map((sp) => (
-            <Card
-              key={sp.id}
-              style={{
-                borderRadius: 16,
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-                position: 'relative',
-                overflow: 'hidden',
-                padding: '16px 20px',
-              }}
-              styles={{
-                body: {
-                  padding: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                },
-              }}
-            >
-              {/* Top Tags */}
-              <div
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}
-              >
-                <Tag
-                  style={{
-                    backgroundColor: '#f1f5f9',
-                    color: '#475569',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '2px 10px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
-                  Admin access
-                </Tag>
-                <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Free</span>
-              </div>
+        {filteredSpaces.length === 0 ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '48px 24px',
+              backgroundColor: '#ffffff',
+              borderRadius: 16,
+              border: '1px dashed #cbd5e1',
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+              No office spaces found
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>
+              You do not have any active spaces right now. Create a new space below to get started.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {filteredSpaces.map((sp) => {
+              const isAdmin = sp.user_role === 'Owner' || sp.user_role === 'Admin' || (sp.is_admin ?? false);
 
-              {/* Organization Logo & Title */}
-              <div
+              return (
+              <Card
+                key={sp.id}
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  margin: '12px 0 24px',
+                  borderRadius: 16,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  padding: '16px 20px',
+                }}
+                styles={{
+                  body: {
+                    padding: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  },
                 }}
               >
+                {/* Top Tags */}
                 <div
                   style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+                    width: '100%',
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 12,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    marginBottom: 16,
+                  }}
+                >
+                  <Tag
+                    style={{
+                      backgroundColor: '#f1f5f9',
+                      color: '#475569',
+                      border: 'none',
+                      borderRadius: 12,
+                      padding: '2px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isAdmin ? 'Admin access' : 'Member access'}
+                  </Tag>
+                  <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>Free</span>
+                </div>
+
+                {/* Organization Logo & Title */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    margin: '12px 0 24px',
                   }}
                 >
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 56,
+                      height: 56,
                       borderRadius: '50%',
-                      border: '3px solid #f43f5e',
-                      borderTopColor: '#38bdf8',
+                      background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 12,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        border: '3px solid #f43f5e',
+                        borderTopColor: '#38bdf8',
+                      }}
+                    />
+                  </div>
+                  <Title level={3} style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
+                    {sp.name}
+                  </Title>
                 </div>
-                <Title level={3} style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
-                  {sp.name}
-                </Title>
-              </div>
 
-              {/* Action Buttons matching screenshot */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <Button
-                  type="primary"
-                  size="large"
-                  onClick={() => handleEnterOffice(sp.id)}
-                  style={{
-                    backgroundColor: '#1e293b',
-                    borderColor: '#1e293b',
-                    borderRadius: 8,
-                    padding: '0 28px',
-                    height: 42,
-                    fontWeight: 600,
-                  }}
-                >
-                  Enter office
-                </Button>
+                {/* Action Buttons matching screenshot */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <Button
+                    type="primary"
+                    size="large"
+                    onClick={() => handleEnterOffice(sp.id)}
+                    style={{
+                      backgroundColor: '#1e293b',
+                      borderColor: '#1e293b',
+                      borderRadius: 8,
+                      padding: '0 28px',
+                      height: 42,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Enter office
+                  </Button>
 
-                <Button
-                  type="link"
-                  icon={<TeamOutlined />}
-                  style={{ color: '#0f172a', fontWeight: 600, fontSize: 14 }}
-                  onClick={() => message.info('Team management panel ready!')}
-                >
-                  Manage Team
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+                  {isAdmin && (
+                    <Button
+                      type="link"
+                      icon={<TeamOutlined />}
+                      style={{ color: '#0f172a', fontWeight: 600, fontSize: 14 }}
+                      onClick={() => navigate(`/o/${sp.id}/admin/manage-members`)}
+                    >
+                      Manage Team
+                    </Button>
+                  )}
+                </div>
+              </Card>
+              );
+            })}
+          </div>
+        )}
+
 
         {/* Create New Space Box (Matching Screenshot 2) */}
         <div
@@ -390,7 +410,7 @@ export const Dashboard: React.FC = () => {
 
           <Button
             size="large"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => navigate('/setup-office')}
             style={{
               marginTop: 20,
               borderRadius: 8,

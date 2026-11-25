@@ -7,6 +7,11 @@ import Lobby from '../pages/Lobby';
 import MeetingRoom from '../pages/MeetingRoom';
 import ScheduleMeeting from '../pages/ScheduleMeeting';
 import AdminDashboard from '../pages/AdminDashboard';
+import SetupOffice from '../pages/SetupOffice';
+import SetupInvite from '../pages/SetupInvite';
+import ManageMembers from '../pages/ManageMembers';
+import InviteAccept from '../pages/InviteAccept';
+import AcceptInvitation from '../pages/AcceptInvitation';
 import ProtectedRoute from './ProtectedRoute';
 
 export const AppRoutes: React.FC = () => {
@@ -15,12 +20,50 @@ export const AppRoutes: React.FC = () => {
       {/* 1. Google One-Click Login */}
       <Route path="/login" element={<Login />} />
 
-      {/* 2. Spaces Dashboard (Screenshots 1 & 2) */}
+      {/* 2. Public Office & Guest Room Invitation Acceptance */}
+      <Route path="/invite/:inviteCode" element={<InviteAccept />} />
+      <Route path="/invite/guest/:inviteCode" element={<InviteAccept isGuestRoom={true} />} />
+
+      {/* 2b. Email Token-based Invitation Acceptance */}
+      <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
+
+
+      {/* 3. Spaces Dashboard (Screenshots 1 & 2) */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 4. Team Setup Flow (Screenshot 3) */}
+      <Route
+        path="/setup-office"
+        element={
+          <ProtectedRoute>
+            <SetupOffice />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 5. Team Invite Flow (Screenshot 4) */}
+      <Route
+        path="/setup/:spaceId/office/invite"
+        element={
+          <ProtectedRoute>
+            <SetupInvite />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 6. Admin Members Directory (Screenshots 5, 6, 7) */}
+      <Route
+        path="/o/:spaceId/admin/manage-members"
+        element={
+          <ProtectedRoute>
+            <ManageMembers />
           </ProtectedRoute>
         }
       />

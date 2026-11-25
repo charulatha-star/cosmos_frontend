@@ -21,7 +21,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     );
   }
 
+  const hasStoredSession = Boolean(localStorage.getItem('cosmos_token') && localStorage.getItem('cosmos_user'));
+
   if (!isAuthenticated || !user) {
+    if (hasStoredSession) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+          <Spin size="large" tip="Entering space..." />
+        </div>
+      );
+    }
     // Redirect unauthenticated users to login, preserving intended route
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

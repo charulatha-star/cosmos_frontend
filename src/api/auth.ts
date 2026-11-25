@@ -25,6 +25,12 @@ export const authApi = {
     return response.data;
   },
 
+  // Update user profile
+  updateProfile: async (data: Partial<User>): Promise<User> => {
+    const response = await apiClient.patch<User>('/auth/me/', data);
+    return response.data;
+  },
+
   // Logout
   logout: async (): Promise<void> => {
     try {

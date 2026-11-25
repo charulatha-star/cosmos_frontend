@@ -11,6 +11,8 @@ interface AuthContextType {
   loginWithGoogle: (email: string, password?: string, name?: string) => Promise<void>;
   loginAsMock: (role: UserRole) => void;
   logout: () => void;
+  updateUser: (updatedData: Partial<User>) => void;
+  setGuestSession: (tokens: AuthTokens, userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -154,6 +156,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem(USER_KEY);
   };
 
+  const updateUser = (updatedData: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedData };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const setGuestSession = (tokens: AuthTokens, userData: User) => {
+    saveSession(tokens, userData);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -165,6 +180,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loginWithGoogle,
         loginAsMock,
         logout,
+        updateUser,
+        setGuestSession,
       }}
     >
       {children}

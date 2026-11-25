@@ -61,7 +61,8 @@ interface ParticipantTileData {
 }
 
 export const MeetingRoom: React.FC = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomId: rawRoomId } = useParams<{ roomId: string }>();
+  const roomId = rawRoomId ? rawRoomId.trim().replace(/[./\s]+$/, '') : '';
   const { user } = useAuth();
   const navigate = useNavigate();
 

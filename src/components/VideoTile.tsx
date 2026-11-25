@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Card, Avatar, Tag, Space } from 'antd';
 import { UserOutlined, AudioMutedOutlined, CrownOutlined } from '@ant-design/icons';
 import type { Track } from 'livekit-client';
+import { getAvatarUrl } from './CosmosProfileStatusModal';
 
 interface VideoTileProps {
   participantName: string;
@@ -61,16 +62,6 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       videoEl.srcObject = null;
     }
   }, [videoTrack, isCameraOff, isLocal]);
-
-  // Generate consistent background color based on name
-  const getAvatarBg = (name: string) => {
-    const colors = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#db2777', '#4f46e5'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
 
   return (
     <Card
@@ -135,9 +126,9 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         >
           <Avatar
             size={80}
-            src={`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(participantName)}`}
+            src={getAvatarUrl({ name: participantName })}
             style={{
-              backgroundColor: getAvatarBg(participantName),
+              backgroundColor: '#f1f5f9',
               border: isActiveSpeaker ? '3px solid #22c55e' : '3px solid #334155',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
             }}

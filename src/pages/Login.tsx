@@ -114,7 +114,14 @@ export const Login: React.FC = () => {
       <GoogleSignInModal
         open={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}
-        onSuccess={() => navigate('/dashboard', { replace: true })}
+        onSuccess={() => {
+          const pendingInvite = sessionStorage.getItem('cosmos_pending_invite');
+          if (pendingInvite) {
+            navigate(`/invite/${pendingInvite}`, { replace: true });
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
+        }}
       />
     </div>
   );
