@@ -1372,16 +1372,23 @@ export const OfficeSpace: React.FC = () => {
     },
   ]);
 
+  // Keep latest user & space refs so syncPresence doesn't re-create or trigger effects on status changes
+  const userRef = useRef(user);
+  userRef.current = user;
+  const currentSpaceRef = useRef(currentSpace);
+  currentSpaceRef.current = currentSpace;
+
   // Sync own position with backend presence (Step 6 Presence)
   const syncPresence = useCallback(
     async (x: number, y: number, desk?: string) => {
       try {
-        const isAway = user?.status_mode === 'Away' || user?.status === 'offline';
+        const u = userRef.current;
+        const isAway = u?.status_mode === 'Away' || u?.status === 'offline';
         await presenceApi.updatePresence({
           x,
           y,
           desk,
-          space: currentSpace,
+          space: currentSpaceRef.current,
           status: isAway ? 'offline' : 'online',
           is_muted: isMutedRef.current,
           is_camera_on: !isCameraOffRef.current,
@@ -1390,7 +1397,7 @@ export const OfficeSpace: React.FC = () => {
         // Local state fallback
       }
     },
-    [currentSpace, user?.status_mode, user?.status]
+    []
   );
 
   // Automatically mute microphone & camera when entering 'Away' mode (Image 3)
@@ -1418,27 +1425,31 @@ export const OfficeSpace: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Initial load: Fetch saved presence or initialize in backend
+  // Initial load: Only spawn in Reception Area once on initial space join, NEVER when toggling status
+  const spawnedSpaceRef = useRef<string | null>(null);
   useEffect(() => {
     let isMounted = true;
     const initPresence = async () => {
       try {
-        // Always spawn in the Reception Area on entry so all users arrive at Reception first
-        const RECEPTION_X = 685;
-        const RECEPTION_Y = 745;
-        setMyPos({ x: RECEPTION_X, y: RECEPTION_Y });
-        setTargetPos(null);
-        setActiveZone('Reception Area');
+        // Only spawn in the Reception Area on entry so all users arrive at Reception first
+        if (spawnedSpaceRef.current !== currentSpace) {
+          spawnedSpaceRef.current = currentSpace;
+          const RECEPTION_X = 685;
+          const RECEPTION_Y = 745;
+          setMyPos({ x: RECEPTION_X, y: RECEPTION_Y });
+          setTargetPos(null);
+          setActiveZone('Reception Area');
 
-        // Reset presence on join/load so mic & camera start OFF, and position is Reception Area
-        await presenceApi.updatePresence({
-          space: currentSpace,
-          is_muted: true,
-          is_camera_on: false,
-          x: RECEPTION_X,
-          y: RECEPTION_Y,
-          desk: 'Reception Area',
-        }).catch(() => {});
+          // Reset presence on join/load so mic & camera start OFF, and position is Reception Area
+          await presenceApi.updatePresence({
+            space: currentSpace,
+            is_muted: true,
+            is_camera_on: false,
+            x: RECEPTION_X,
+            y: RECEPTION_Y,
+            desk: 'Reception Area',
+          }).catch(() => {});
+        }
 
         const data = await presenceApi.getPresences(currentSpace);
         if (data && isMounted) {
@@ -1452,7 +1463,7 @@ export const OfficeSpace: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentSpace, user?.id, syncPresence]);
+  }, [currentSpace, user?.id]);
 
   // Poll in-room messages when inside a room or in call mode (Cosmos Images 2 & 5)
   useEffect(() => {
