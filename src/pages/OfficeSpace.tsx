@@ -1365,7 +1365,19 @@ export const OfficeSpace: React.FC = () => {
   const [isWalking, setIsWalking] = useState<boolean>(false);
   const [facingDirection, setFacingDirection] = useState<'left' | 'right'>('right');
   const [activeZone, setActiveZone] = useState<string | null>('Reception Area');
-  const [zoom, setZoom] = useState<number>(0.38); // 38% matching screenshot
+  // Dynamically calculate the starting zoom to fill the office space nicely on entry
+  const [zoom, setZoom] = useState<number>(() => {
+    try {
+      const availWidth = window.innerWidth - 260; // minus sidebar
+      const availHeight = window.innerHeight - 130; // minus navbar & bottom bar
+      const scaleX = availWidth / 1400;
+      const scaleY = availHeight / 900;
+      const idealZoom = Math.min(scaleX, scaleY) * 0.96;
+      return Math.max(0.65, Math.min(1.05, +idealZoom.toFixed(2)));
+    } catch {
+      return 0.82;
+    }
+  });
 
   // Step 6: Live Presence list of other teammates
   const [presences, setPresences] = useState<PresenceUpdate[]>([
@@ -2414,6 +2426,7 @@ export const OfficeSpace: React.FC = () => {
                   height: 900,
                   transform: `scale(${zoom})`,
                   transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease-out',
                   position: 'absolute',
                   left: '50%',
                   top: '50%',
@@ -3259,9 +3272,9 @@ export const OfficeSpace: React.FC = () => {
 
                 <div style={{ width: 20, height: 1, backgroundColor: '#e2e8f0', margin: '2px 0' }} />
 
-                <Tooltip title="Zoom In" placement="left">
+                <Tooltip title="Zoom In (+)" placement="left">
                   <div
-                    onClick={() => setZoom((z) => Math.min(1.2, +(z + 0.05).toFixed(2)))}
+                    onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.08).toFixed(2)))}
                     style={{
                       width: 28,
                       height: 28,
@@ -3293,9 +3306,9 @@ export const OfficeSpace: React.FC = () => {
                   {Math.round(zoom * 100)}%
                 </div>
 
-                <Tooltip title="Zoom Out" placement="left">
+                <Tooltip title="Zoom Out (-)" placement="left">
                   <div
-                    onClick={() => setZoom((z) => Math.max(0.2, +(z - 0.05).toFixed(2)))}
+                    onClick={() => setZoom((z) => Math.max(0.3, +(z - 0.08).toFixed(2)))}
                     style={{
                       width: 28,
                       height: 28,
