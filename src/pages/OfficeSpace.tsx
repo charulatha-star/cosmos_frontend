@@ -1345,7 +1345,7 @@ export const OfficeSpace: React.FC = () => {
   };
 
   // Avatar position on 2D map - Default spawn point at Reception Area (Cosmos Image 1)
-  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 580, y: 720 });
+  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 685, y: 745 });
   const [targetPos, setTargetPos] = useState<{ x: number; y: number } | null>(null);
   const [isWalking, setIsWalking] = useState<boolean>(false);
   const [facingDirection, setFacingDirection] = useState<'left' | 'right'>('right');
@@ -1423,25 +1423,25 @@ export const OfficeSpace: React.FC = () => {
     let isMounted = true;
     const initPresence = async () => {
       try {
-        // Reset presence on join/load so mic & camera always start safely OFF
+        // Always spawn in the Reception Area on entry so all users arrive at Reception first
+        const RECEPTION_X = 685;
+        const RECEPTION_Y = 745;
+        setMyPos({ x: RECEPTION_X, y: RECEPTION_Y });
+        setTargetPos(null);
+        setActiveZone('Reception Area');
+
+        // Reset presence on join/load so mic & camera start OFF, and position is Reception Area
         await presenceApi.updatePresence({
           space: currentSpace,
           is_muted: true,
           is_camera_on: false,
+          x: RECEPTION_X,
+          y: RECEPTION_Y,
+          desk: 'Reception Area',
         }).catch(() => {});
 
         const data = await presenceApi.getPresences(currentSpace);
         if (data && isMounted) {
-          const myRec = data.find((p) => p.user_id === user?.id);
-          if (myRec && myRec.x && myRec.y) {
-            setMyPos({ x: myRec.x, y: myRec.y });
-            if (myRec.current_desk) {
-              setActiveZone(myRec.current_desk);
-            }
-          } else {
-            // Seed default spawn position at Reception Area
-            syncPresence(580, 720, 'Reception Area');
-          }
           setPresences(data.filter((p) => p.user_id !== user?.id));
         }
       } catch {
