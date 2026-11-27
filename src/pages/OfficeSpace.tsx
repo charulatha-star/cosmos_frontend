@@ -1668,8 +1668,9 @@ export const OfficeSpace: React.FC = () => {
   }, [myPos, activeZone, syncPresence]);
 
   // Proximity Call Engine (Matching Cosmos Video Image 2)
-  // When users move close (within 190px or in the same desk/zone), they automatically connect to the call section!
-  const PROXIMITY_CALL_DISTANCE = 190;
+  // Only start a call when avatars walk directly next to each other (within 50px or in the same cabin/room).
+  // Nearby desks (85px+ apart) will NOT trigger unwanted calls.
+  const PROXIMITY_CALL_DISTANCE = 50;
 
   const nearbyPresences = presences.filter((p) => {
     const px = p.x ?? 0;
