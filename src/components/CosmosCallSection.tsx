@@ -329,10 +329,12 @@ const ParticipantCard: React.FC<{
             src={getAvatarUrl({ name: participant.name, avatar_seed: avatarSeed } as any)}
             alt={participant.name}
             style={{
-              width: 128,
-              height: 128,
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.22))',
+              width: 110,
+              height: 110,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '3px solid #ffffff',
+              boxShadow: '0 6px 18px rgba(0,0,0,0.18)',
               pointerEvents: 'none',
             }}
           />

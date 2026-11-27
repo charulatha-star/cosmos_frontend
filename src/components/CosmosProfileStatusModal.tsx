@@ -63,102 +63,89 @@ export const isFemaleName = (inputName: string): boolean => {
   return false;
 };
 
-// 9 Beautiful Employee Corporate Avatars Matching Reference Image
+// 10 3D Employee Corporate Avatars Matching Reference Image
 export const AVATAR_PRESETS = [
-  // Top Row (Reference Image)
-  { id: 'alex-executive', name: 'Alex (Executive Suit)', gender: 'male', style: 'avataaars', seed: 'AlexExecutive' },
-  { id: 'emma-blonde', name: 'Emma (Blonde Corporate)', gender: 'female', style: 'avataaars', seed: 'EmmaCorporate' },
-  { id: 'daniel-modern', name: 'Daniel (Modern Blue)', gender: 'male', style: 'avataaars', seed: 'DanielModern' },
-  // Middle Row
-  { id: 'maya-glasses', name: 'Maya (Design Glasses)', gender: 'female', style: 'avataaars', seed: 'MayaDesignGlasses' },
-  { id: 'david-smart', name: 'David (Smart Glasses)', gender: 'male', style: 'avataaars', seed: 'DavidGlasses' },
-  { id: 'sarah-burgundy', name: 'Sarah (Burgundy Blazer)', gender: 'female', style: 'avataaars', seed: 'SarahBurgundy' },
-  // Bottom Row
-  { id: 'robert-distinguished', name: 'Robert (Distinguished)', gender: 'male', style: 'avataaars', seed: 'RobertExecutive' },
-  { id: 'sam-bold', name: 'Sam (Bold Corporate)', gender: 'male', style: 'avataaars', seed: 'SamCorporate' },
-  { id: 'charu-chic', name: 'Charu (Corporate Chic)', gender: 'female', style: 'avataaars', seed: 'CharuCorporate' },
+  // Top Row (1 to 5)
+  { id: 'avatar-1', name: 'Coral Bob', gender: 'female', style: '3d', seed: 'avatar-1', url: '/avatars/avatar-1.png' },
+  { id: 'avatar-2', name: 'Sky Blue', gender: 'male', style: '3d', seed: 'avatar-2', url: '/avatars/avatar-2.png' },
+  { id: 'avatar-3', name: 'Auburn Long', gender: 'female', style: '3d', seed: 'avatar-3', url: '/avatars/avatar-3.png' },
+  { id: 'avatar-4', name: 'Amber Beard', gender: 'male', style: '3d', seed: 'avatar-4', url: '/avatars/avatar-4.png' },
+  { id: 'avatar-5', name: 'Dark Bob', gender: 'female', style: '3d', seed: 'avatar-5', url: '/avatars/avatar-5.png' },
+  // Bottom Row (6 to 10)
+  { id: 'avatar-6', name: 'Classic Blue', gender: 'male', style: '3d', seed: 'avatar-6', url: '/avatars/avatar-6.png' },
+  { id: 'avatar-7', name: 'Green Pixie', gender: 'female', style: '3d', seed: 'avatar-7', url: '/avatars/avatar-7.png' },
+  { id: 'avatar-8', name: 'Curly Orange', gender: 'male', style: '3d', seed: 'avatar-8', url: '/avatars/avatar-8.png' },
+  { id: 'avatar-9', name: 'Platinum Lavender', gender: 'female', style: '3d', seed: 'avatar-9', url: '/avatars/avatar-9.png' },
+  { id: 'avatar-10', name: 'Purple Classic', gender: 'male', style: '3d', seed: 'avatar-10', url: '/avatars/avatar-10.png' },
 ];
 
-export const FEMALE_SEEDS = [
-  { seed: 'EmmaCorporate', bg: 'ffd5dc' },
-  { seed: 'MayaDesignGlasses', bg: 'd1d4f9' },
-  { seed: 'SarahBurgundy', bg: 'ffdfbf' },
-  { seed: 'CharuCorporate', bg: 'ffd5dc' },
-  { seed: 'SophiaExecutive', bg: 'e0e7ff' },
-  { seed: 'AmeliaBiz', bg: 'fae8ff' },
-];
+export const getAvatarUrl = (
+  user?: User | { name?: string; email?: string; avatar_seed?: string; avatar_style?: string; avatar_url?: string } | null,
+  customSeed?: string,
+  _customStyle?: string
+): string => {
+  // If user already has an explicit avatar_url pointing to our avatars set
+  if (user && 'avatar_url' in user && user.avatar_url && user.avatar_url.startsWith('/avatars/')) {
+    return user.avatar_url;
+  }
 
-export const MALE_SEEDS = [
-  { seed: 'AlexExecutive', bg: 'b6e3f4' },
-  { seed: 'DanielModern', bg: 'c0aede' },
-  { seed: 'DavidGlasses', bg: 'e2e8f0' },
-  { seed: 'RobertExecutive', bg: 'e2e8f0' },
-  { seed: 'SamCorporate', bg: 'b6e3f4' },
-  { seed: 'MarcusDirector', bg: 'c0aede' },
-];
+  const requestedSeed = customSeed || user?.avatar_seed;
 
-export const getAvatarUrl = (user?: User | { name?: string; email?: string; avatar_seed?: string; avatar_style?: string } | null, customSeed?: string, _customStyle?: string): string => {
-  const name = user?.name || user?.email || customSeed || 'CosmosMember';
+  // Direct match in presets
+  const presetMatch = AVATAR_PRESETS.find(
+    (p) => p.id === requestedSeed || p.seed === requestedSeed || p.url === requestedSeed
+  );
+  if (presetMatch) {
+    return presetMatch.url;
+  }
+
+  const name = (user?.name || user?.email || customSeed || 'Charu Latha').trim();
+  const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
   const female = isFemaleName(name);
 
-  // Check if a preset was explicitly chosen
-  const presetMatch = AVATAR_PRESETS.find(
-    (p) => p.seed === customSeed || p.seed === user?.avatar_seed || p.id === user?.avatar_seed
-  );
+  const femaleAvatars = [
+    '/avatars/avatar-1.png',
+    '/avatars/avatar-3.png',
+    '/avatars/avatar-5.png',
+    '/avatars/avatar-7.png',
+    '/avatars/avatar-9.png',
+  ];
 
-  let seed = customSeed || user?.avatar_seed;
-  let bg = female ? 'ffd5dc' : 'b6e3f4';
+  const maleAvatars = [
+    '/avatars/avatar-2.png',
+    '/avatars/avatar-4.png',
+    '/avatars/avatar-6.png',
+    '/avatars/avatar-8.png',
+    '/avatars/avatar-10.png',
+  ];
 
-  if (presetMatch) {
-    seed = presetMatch.seed;
-    if (presetMatch.id === 'alex-executive' || presetMatch.id === 'sam-bold') bg = 'b6e3f4';
-    else if (presetMatch.id === 'emma-blonde' || presetMatch.id === 'charu-chic') bg = 'ffd5dc';
-    else if (presetMatch.id === 'daniel-modern') bg = 'c0aede';
-    else if (presetMatch.id === 'maya-glasses') bg = 'd1d4f9';
-    else if (presetMatch.id === 'david-smart' || presetMatch.id === 'robert-distinguished') bg = 'e2e8f0';
-    else if (presetMatch.id === 'sarah-burgundy') bg = 'ffdfbf';
-  } else if (!seed || seed === 'Felix' || seed === 'Abby' || seed === 'Whiskers' || seed.length < 3) {
-    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (female) {
+    if (cleanName.includes('charulatham') || cleanName.includes('312')) {
+      return '/avatars/avatar-3.png';
+    }
+    if (cleanName.includes('charu')) {
+      return '/avatars/avatar-1.png';
+    }
+    if (cleanName.includes('uma')) {
+      return '/avatars/avatar-5.png';
+    }
+
     let hash = 0;
     for (let i = 0; i < cleanName.length; i++) {
       hash = (hash * 31 + cleanName.charCodeAt(i)) >>> 0;
     }
+    return femaleAvatars[hash % femaleAvatars.length];
+  } else {
+    if (cleanName.includes('vishnu')) return '/avatars/avatar-2.png';
+    if (cleanName.includes('jagan')) return '/avatars/avatar-6.png';
+    if (cleanName.includes('vinoth')) return '/avatars/avatar-4.png';
 
-    if (female) {
-      if (cleanName.includes('charulatham') || cleanName.includes('312')) {
-        seed = 'EmmaCorporate';
-        bg = 'ffd5dc';
-      } else if (cleanName.includes('charu')) {
-        seed = 'CharuCorporate';
-        bg = 'ffd5dc';
-      } else if (cleanName.includes('uma')) {
-        seed = 'SarahBurgundy';
-        bg = 'ffdfbf';
-      } else {
-        const item = FEMALE_SEEDS[hash % FEMALE_SEEDS.length];
-        seed = item.seed;
-        bg = item.bg;
-      }
-    } else {
-      if (cleanName.includes('vishnu')) {
-        seed = 'AlexExecutive';
-        bg = 'b6e3f4';
-      } else if (cleanName.includes('jagan')) {
-        seed = 'DanielModern';
-        bg = 'c0aede';
-      } else if (cleanName.includes('vinoth')) {
-        seed = 'DavidGlasses';
-        bg = 'e2e8f0';
-      } else {
-        const item = MALE_SEEDS[hash % MALE_SEEDS.length];
-        seed = item.seed;
-        bg = item.bg;
-      }
+    let hash = 0;
+    for (let i = 0; i < cleanName.length; i++) {
+      hash = (hash * 31 + cleanName.charCodeAt(i)) >>> 0;
     }
+    return maleAvatars[hash % maleAvatars.length];
   }
-
-  // Pure, clean DiceBear 7.x endpoint returning guaranteed HTTP 200 SVG circular portraits
-  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&radius=50&backgroundColor=${bg}`;
 };
 
 export const CosmosProfileStatusModal: React.FC<CosmosProfileStatusModalProps> = ({
@@ -655,23 +642,24 @@ export const CosmosProfileStatusModal: React.FC<CosmosProfileStatusModalProps> =
                   width: 170,
                   height: 170,
                   borderRadius: 16,
-                  backgroundColor: '#e0f2fe',
+                  backgroundColor: '#f1f5f9',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   overflow: 'hidden',
                   boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-                  border: '1px solid #bae6fd',
+                  border: '1px solid #cbd5e1',
                 }}
               >
                 <img
                   src={currentAvatarDisplayUrl}
                   alt="3D Character Avatar"
                   style={{
-                    width: 160,
-                    height: 160,
-                    objectFit: 'contain',
-                    filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.12))',
+                    width: 140,
+                    height: 140,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.12))',
                   }}
                 />
               </div>
@@ -707,25 +695,25 @@ export const CosmosProfileStatusModal: React.FC<CosmosProfileStatusModalProps> =
                 {AVATAR_PRESETS[selectedAvatarIndex]?.name}
               </div>
 
-              {/* 9 Corporate Avatars Picker (Reference Image Match) */}
+              {/* 10 3D Avatars Picker (Reference Image Match) */}
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 8, textAlign: 'center' }}>
-                  Choose Your Corporate Look
+                  Choose Your 3D Avatar
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, justifyItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, justifyItems: 'center' }}>
                   {AVATAR_PRESETS.map((preset, idx) => {
                     const isSelected = selectedAvatarIndex === idx;
-                    const avatarUrl = getAvatarUrl({ name: preset.name }, preset.seed, preset.style);
+                    const avatarUrl = preset.url;
                     return (
                       <div
                         key={preset.id}
                         onClick={() => setSelectedAvatarIndex(idx)}
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 32,
+                          height: 32,
                           borderRadius: '50%',
                           cursor: 'pointer',
-                          padding: 2,
+                          padding: 1,
                           border: isSelected ? '2.5px solid #2563eb' : '1.5px solid #e2e8f0',
                           backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
                           transition: 'all 0.15s ease',
