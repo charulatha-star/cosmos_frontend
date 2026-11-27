@@ -87,7 +87,7 @@ const OFFICE_ZONES = [
   { id: 'cabin-2', name: 'Cabin 2', x: 500, y: 60, width: 400, height: 220, type: 'cabin' },
 
   // 3. War Room (Top Right)
-  { id: 'war-room', name: 'War Room', x: 940, y: 60, width: 370, height: 390, type: 'war_room' },
+  { id: 'war-room', name: 'War Room', x: 940, y: 60, width: 370, height: 390, type: 'cabin' },
 
   // 4. Cabin 3 (Middle Left)
   { id: 'cabin-3', name: 'Cabin 3', x: 80, y: 320, width: 380, height: 240, type: 'cabin' },
@@ -98,10 +98,7 @@ const OFFICE_ZONES = [
   // 6. Cabin 5 (Bottom Right - Lower Room, strictly separate)
   { id: 'cabin-5', name: 'Cabin 5', x: 960, y: 690, width: 350, height: 185, type: 'cabin' },
 
-  // 7. Coffee / Breakout Lounge (Bottom Left under Cabin 3)
-  { id: 'lounge', name: 'Coffee Lounge', x: 80, y: 590, width: 380, height: 275, type: 'lounge' },
-
-  // 8. Reception Area / Default Spawn Point (Bottom Center Lounge)
+  // 7. Reception Area / Default Spawn Point (Bottom Center Lounge)
   { id: 'reception', name: 'Reception Area', x: 500, y: 690, width: 420, height: 185, type: 'reception' },
 
   // 9. 20 Individual Workstation Desks (4 Rows x 5 Seats) in Central Floor
@@ -2356,7 +2353,7 @@ export const OfficeSpace: React.FC = () => {
                 { name: 'Cabin 3', icon: '🚪', id: 'cabin-3' },
                 { name: 'Cabin 4', icon: '🚪', id: 'cabin-4' },
                 { name: 'Cabin 5', icon: '🚪', id: 'cabin-5' },
-                { name: 'War Room', icon: '🚨', id: 'war-room' },
+                { name: 'War Room', icon: '👥', id: 'war-room' },
                 { name: 'Reception Area', icon: '🛎️', id: 'reception' },
               ].map((r) => {
                 const z = OFFICE_ZONES.find((oz) => oz.id === r.id);
@@ -2476,9 +2473,12 @@ export const OfficeSpace: React.FC = () => {
                 {OFFICE_ZONES.map((zone) => {
                   const isCurrentZone = activeZone === zone.name;
 
-                  // 1. Executive Cabins (Cabin 1, Cabin 2, Cabin 3, Cabin 4, Cabin 5)
+                  // 1. Executive Cabins & War Room (Cabin 1 to 5 & War Room)
                   if (zone.type === 'cabin') {
-                    const numChairs = zone.width > 360 ? 4 : 3;
+                    const isWarRoom = zone.id === 'war-room';
+                    const numChairs = isWarRoom ? 5 : zone.width > 360 ? 4 : 3;
+                    const tableHeight = isWarRoom ? 130 : Math.min(zone.height - 110, 68);
+                    const tableWidth = isWarRoom ? 250 : Math.min(zone.width - 100, 240);
                     return (
                       <div
                         key={zone.id}
@@ -2528,25 +2528,26 @@ export const OfficeSpace: React.FC = () => {
                         <div
                           style={{
                             position: 'absolute',
-                            top: 8,
-                            width: Math.min(120, zone.width - 120),
-                            height: 18,
-                            border: '1px solid #cbd5e1',
-                            borderRadius: 3,
+                            top: 10,
+                            width: Math.min(140, zone.width - 120),
+                            height: 22,
+                            border: '1.5px solid #93c5fd',
+                            borderRadius: 4,
                             backgroundColor: '#ffffff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: 10,
-                            color: '#64748b',
-                            fontWeight: 600,
+                            fontSize: 11,
+                            color: '#2563eb',
+                            fontWeight: 700,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                           }}
                         >
                           🖥️ {zone.name}
                         </div>
 
                         {/* Top Chairs */}
-                        <div style={{ position: 'absolute', top: 30, display: 'flex', gap: 14 }}>
+                        <div style={{ position: 'absolute', top: isWarRoom ? 70 : 30, display: 'flex', gap: 14 }}>
                           {Array.from({ length: numChairs }).map((_, i) => (
                             <div
                               key={`chair-top-${i}`}
@@ -2564,8 +2565,8 @@ export const OfficeSpace: React.FC = () => {
                         {/* Central Conference Table */}
                         <div
                           style={{
-                            width: Math.min(zone.width - 100, 240),
-                            height: Math.min(zone.height - 110, 68),
+                            width: tableWidth,
+                            height: tableHeight,
                             border: '1.5px solid #93c5fd',
                             borderRadius: 14,
                             backgroundColor: '#ffffff',
@@ -2590,7 +2591,7 @@ export const OfficeSpace: React.FC = () => {
                         </div>
 
                         {/* Bottom Chairs */}
-                        <div style={{ position: 'absolute', bottom: 30, display: 'flex', gap: 14 }}>
+                        <div style={{ position: 'absolute', bottom: isWarRoom ? 70 : 30, display: 'flex', gap: 14 }}>
                           {Array.from({ length: numChairs }).map((_, i) => (
                             <div
                               key={`chair-bot-${i}`}
@@ -2630,267 +2631,14 @@ export const OfficeSpace: React.FC = () => {
                             boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
                           }}
                         >
-                          <span>🚪</span>
+                          <span>{isWarRoom ? '👥' : '🚪'}</span>
                           <span>{zone.name}</span>
                         </div>
                       </div>
                     );
                   }
 
-                  // 2. War Room (Top Right - Live Operations & Strategy Command Center)
-                  if (zone.type === 'war_room') {
-                    return (
-                      <div
-                        key={zone.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeskClick(zone);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: zone.x,
-                          top: zone.y,
-                          width: zone.width,
-                          height: zone.height,
-                          border: isCurrentZone ? '2px solid #ef4444' : '1.5px dashed #f87171',
-                          borderRadius: 16,
-                          backgroundColor: isCurrentZone ? 'rgba(239, 68, 68, 0.08)' : 'rgba(254, 242, 242, 0.45)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          padding: 14,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          boxShadow: isCurrentZone ? '0 0 20px rgba(239, 68, 68, 0.2)' : 'none',
-                        }}
-                      >
-                        {/* Tactical Video Wall / Operations Screen */}
-                        <div
-                          style={{
-                            width: '100%',
-                            height: 64,
-                            border: '1.5px solid #ef4444',
-                            borderRadius: 10,
-                            backgroundColor: '#0f172a',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0 16px',
-                            position: 'relative',
-                            boxShadow: '0 4px 12px rgba(15, 23, 42, 0.25)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444', display: 'inline-block', boxShadow: '0 0 6px #ef4444' }} />
-                            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 800, letterSpacing: '0.05em' }}>LIVE OPS</span>
-                          </div>
-                          <div style={{ fontSize: 13, color: '#ffffff', fontWeight: 700, letterSpacing: '0.05em' }}>
-                            WAR ROOM
-                          </div>
-                          <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>
-                            DEFCON 1 • ACTIVE
-                          </div>
-                        </div>
-
-                        {/* Large Strategic Command Table */}
-                        <div
-                          style={{
-                            marginTop: 32,
-                            width: 250,
-                            height: 110,
-                            border: '2px solid #cbd5e1',
-                            borderRadius: 16,
-                            backgroundColor: '#ffffff',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'space-around',
-                            padding: '10px 14px',
-                            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',
-                            position: 'relative',
-                          }}
-                        >
-                          {/* Top 4 Command Chairs */}
-                          <div style={{ position: 'absolute', top: -24, display: 'flex', gap: 18 }}>
-                            {[0, 1, 2, 3].map((i) => (
-                              <div
-                                key={`wr-top-${i}`}
-                                style={{
-                                  width: 22,
-                                  height: 20,
-                                  border: '1.5px solid #64748b',
-                                  borderRadius: '50% 50% 4px 4px',
-                                  backgroundColor: '#f1f5f9',
-                                }}
-                              />
-                            ))}
-                          </div>
-
-                          {/* Table Screen & Microphones */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <div style={{ width: 22, height: 14, border: '1px solid #94a3b8', backgroundColor: '#e2e8f0', borderRadius: 2 }} />
-                            <div style={{ width: 70, height: 28, border: '1.5px solid #0284c7', backgroundColor: '#e0f2fe', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#0369a1' }}>
-                              RADAR
-                            </div>
-                            <div style={{ width: 22, height: 14, border: '1px solid #94a3b8', backgroundColor: '#e2e8f0', borderRadius: 2 }} />
-                          </div>
-
-                          {/* Bottom 4 Command Chairs */}
-                          <div style={{ position: 'absolute', bottom: -24, display: 'flex', gap: 18 }}>
-                            {[0, 1, 2, 3].map((i) => (
-                              <div
-                                key={`wr-bot-${i}`}
-                                style={{
-                                  width: 22,
-                                  height: 20,
-                                  border: '1.5px solid #64748b',
-                                  borderRadius: '4px 4px 50% 50%',
-                                  backgroundColor: '#f1f5f9',
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Left & Right End Chairs */}
-                        <div style={{ position: 'absolute', left: 24, top: 165, width: 20, height: 22, border: '1.5px solid #64748b', borderRadius: '50% 4px 4px 50%', backgroundColor: '#f1f5f9' }} />
-                        <div style={{ position: 'absolute', right: 24, top: 165, width: 20, height: 22, border: '1.5px solid #64748b', borderRadius: '4px 50% 50% 4px', backgroundColor: '#f1f5f9' }} />
-
-                        {/* Audience / Advisor Seating Grid */}
-                        <div style={{ marginTop: 44, display: 'flex', gap: 14 }}>
-                          {[0, 1, 2, 3, 4].map((i) => (
-                            <div
-                              key={`wr-adv-${i}`}
-                              style={{
-                                width: 18,
-                                height: 18,
-                                border: '1.5px solid #cbd5e1',
-                                borderRadius: '50% 50% 3px 3px',
-                                backgroundColor: '#f8fafc',
-                              }}
-                            />
-                          ))}
-                        </div>
-
-                        {/* Red Pill Badge with Red Border */}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            left: 12,
-                            bottom: 10,
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: '3px 10px',
-                            borderRadius: 4,
-                            borderLeft: '3px solid #ef4444',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
-                          }}
-                        >
-                          <span>🚨</span>
-                          <span>{zone.name}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // 3. Coffee Lounge / Breakout Area (Bottom Left)
-                  if (zone.type === 'lounge') {
-                    return (
-                      <div
-                        key={zone.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeskClick(zone);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: zone.x,
-                          top: zone.y,
-                          width: zone.width,
-                          height: zone.height,
-                          border: isCurrentZone ? '2px solid #f59e0b' : '1.5px dashed #fcd34d',
-                          borderRadius: 16,
-                          backgroundColor: isCurrentZone ? 'rgba(245, 158, 11, 0.08)' : 'rgba(254, 252, 232, 0.45)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          padding: 16,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        {/* Coffee Bar Counter */}
-                        <div
-                          style={{
-                            width: '100%',
-                            height: 48,
-                            border: '1.5px solid #d97706',
-                            borderRadius: 8,
-                            backgroundColor: '#fef3c7',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-around',
-                            padding: '0 12px',
-                            boxShadow: '0 2px 6px rgba(217, 119, 6, 0.15)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#92400e' }}>
-                            ☕ Coffee & Espresso Bar
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, fontSize: 13 }}>
-                            <span>🥐</span>
-                            <span>🍵</span>
-                            <span>🍩</span>
-                          </div>
-                        </div>
-
-                        {/* 2 Circular Coffee Tables with Armchairs */}
-                        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', marginTop: 10 }}>
-                          {[0, 1].map((tbl) => (
-                            <div key={`coffee-tbl-${tbl}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-                              <div style={{ width: 18, height: 16, border: '1.5px solid #fcd34d', borderRadius: '50% 50% 3px 3px', backgroundColor: '#fffbeb', marginBottom: 4 }} />
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <div style={{ width: 16, height: 18, border: '1.5px solid #fcd34d', borderRadius: '50% 3px 3px 50%', backgroundColor: '#fffbeb' }} />
-                                <div style={{ width: 50, height: 50, borderRadius: '50%', border: '2px solid #b45309', backgroundColor: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-                                  ☕
-                                </div>
-                                <div style={{ width: 16, height: 18, border: '1.5px solid #fcd34d', borderRadius: '3px 50% 50% 3px', backgroundColor: '#fffbeb' }} />
-                              </div>
-                              <div style={{ width: 18, height: 16, border: '1.5px solid #fcd34d', borderRadius: '3px 3px 50% 50%', backgroundColor: '#fffbeb', marginTop: 4 }} />
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Amber Pill Badge with Warm Border */}
-                        <div
-                          style={{
-                            alignSelf: 'flex-start',
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            borderLeft: '3px solid #f59e0b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                          }}
-                        >
-                          <span>☕</span>
-                          <span>{zone.name}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // 4. Reception Area / Lounge (Matching user requirement R)
+                  // 2. Reception Area / Lounge (Matching user requirement R)
                   if (zone.type === 'reception') {
                     return (
                       <div
