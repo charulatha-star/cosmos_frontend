@@ -21,6 +21,8 @@ interface CosmosPipCardProps {
   isCameraOff: boolean;
   isMuted: boolean;
   isScreenSharing: boolean;
+  isLocalPresenter?: boolean;
+  presenterName?: string;
   isHandRaised: boolean;
   cameraStream?: MediaStream | null;
   screenStream?: MediaStream | null;
@@ -435,6 +437,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   isCameraOff,
   isMuted,
   isScreenSharing,
+  isLocalPresenter = false,
+  presenterName,
   isHandRaised,
   cameraStream,
   screenStream,
@@ -669,7 +673,11 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94a3b8', fontSize: 11, fontWeight: 600 }}>
           <span style={{ fontSize: 13 }}>{isScreenSharing ? '🖥️' : '📺'}</span>
           <span style={{ color: '#e2e8f0', letterSpacing: '0.02em' }}>
-            {spaceName} {isScreenSharing ? '• Sharing' : ''}
+            {isScreenSharing
+              ? isLocalPresenter
+                ? 'You are presenting'
+                : `${presenterName || 'Teammate'} is presenting`
+              : spaceName}
           </span>
           {isFullScreen && (
             <span style={{ color: '#38bdf8', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>
@@ -826,7 +834,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                     boxShadow: isFullScreen ? '0 10px 30px rgba(0,0,0,0.6)' : 'none',
                   }}
                 >
-                  {!showSelfPreview ? (
+                  {isLocalPresenter && !showSelfPreview ? (
                     /* Google Meet Presenter State: Clean card preventing dizzying infinite mirror loop */
                     <div
                       style={{
@@ -970,26 +978,28 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                         }}
                       />
 
-                      <button
-                        onClick={() => setShowSelfPreview(false)}
-                        style={{
-                          position: 'absolute',
-                          top: 12,
-                          right: 12,
-                          backgroundColor: 'rgba(15, 23, 42, 0.88)',
-                          color: '#38bdf8',
-                          border: '1px solid rgba(56, 189, 248, 0.3)',
-                          borderRadius: 6,
-                          padding: '4px 10px',
-                          fontSize: 11,
-                          cursor: 'pointer',
-                          backdropFilter: 'blur(4px)',
-                          zIndex: 6,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Hide presentation feed
-                      </button>
+                      {isLocalPresenter && (
+                        <button
+                          onClick={() => setShowSelfPreview(false)}
+                          style={{
+                            position: 'absolute',
+                            top: 12,
+                            right: 12,
+                            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                            color: '#38bdf8',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            borderRadius: 6,
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            backdropFilter: 'blur(4px)',
+                            zIndex: 6,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Hide presentation feed
+                        </button>
+                      )}
                     </>
                   )}
 
@@ -1013,7 +1023,11 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                     }}
                   >
                     <span style={{ fontSize: 13 }}>🖥️</span>
-                    <span>{`${userName}'s Screen`}</span>
+                    <span>
+                      {isLocalPresenter
+                        ? 'You are presenting'
+                        : `${presenterName || 'Teammate'} is presenting`}
+                    </span>
                     {isFullScreen && (
                       <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 500, marginLeft: 6 }}>
                         (Press Esc to exit full view)
@@ -1258,7 +1272,15 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
             </Tooltip>
 
             {/* Screen Share Toggle */}
-            <Tooltip title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}>
+            <Tooltip
+              title={
+                isLocalPresenter
+                  ? 'Stop Presenting'
+                  : isScreenSharing
+                  ? 'Present your screen instead'
+                  : 'Share Screen'
+              }
+            >
               <div
                 onClick={onToggleScreenShare}
                 style={{
@@ -1269,11 +1291,12 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  backgroundColor: isScreenSharing ? '#2563eb' : 'transparent',
+                  backgroundColor: isLocalPresenter ? '#2563eb' : 'transparent',
+                  color: isLocalPresenter ? '#ffffff' : '#f8fafc',
                   transition: 'background-color 0.15s ease',
                 }}
               >
-                <ScreenSvg size={16} color={isScreenSharing ? '#ffffff' : '#f8fafc'} />
+                <ScreenSvg size={16} color={isLocalPresenter ? '#ffffff' : '#f8fafc'} />
               </div>
             </Tooltip>
 

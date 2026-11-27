@@ -490,6 +490,11 @@ export const OfficeSpace: React.FC = () => {
   const activeScreenTrackRef = useRef<Track | MediaStreamTrack | MediaStream | null>(null);
   activeScreenTrackRef.current = activeScreenTrack;
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
+  const [isLocalScreenSharing, setIsLocalScreenSharing] = useState<boolean>(false);
+  const [remoteScreenSharer, setRemoteScreenSharer] = useState<{ id: string; name: string } | null>(null);
+  const screenPresenterName = isLocalScreenSharing
+    ? (user?.name || 'You')
+    : (remoteScreenSharer?.name || 'Teammate');
   const [isPipVisible, setIsPipVisible] = useState<boolean>(true);
   const [isDocPipOpen, setIsDocPipOpen] = useState<boolean>(false);
   const [docPipContainer, setDocPipContainer] = useState<HTMLElement | null>(null);
@@ -935,6 +940,10 @@ export const OfficeSpace: React.FC = () => {
         room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
           if (pub.source === Track.Source.ScreenShare) {
             setActiveScreenTrack(track as VideoTrack);
+            setRemoteScreenSharer({
+              id: participant.identity,
+              name: participant.name || 'Teammate',
+            });
             setIsScreenSharing(true);
             message.info(`${participant.name || 'A teammate'} is sharing their screen`);
           } else if (pub.source === Track.Source.Camera) {
@@ -986,8 +995,9 @@ export const OfficeSpace: React.FC = () => {
         });
 
         room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, pub?: RemoteTrackPublication, participant?: RemoteParticipant) => {
-          if (track === activeScreenTrackRef.current) {
+          if (pub?.source === Track.Source.ScreenShare || track === activeScreenTrackRef.current) {
             setActiveScreenTrack(null);
+            setRemoteScreenSharer(null);
             setIsScreenSharing(false);
           }
           if (track.kind === Track.Kind.Audio) {
@@ -1341,20 +1351,17 @@ export const OfficeSpace: React.FC = () => {
       localScreenStreamRef.current.getTracks().forEach((t) => t.stop());
       localScreenStreamRef.current = null;
     }
-    setActiveScreenTrack(null);
-    setScreenStream(null);
-    setIsScreenSharing(false);
-    message.info('Screen sharing stopped.');
-  }, []);
-
-  // Real Screen Sharing Toggle (PRD Section 6.3 & Step 4)
-  const toggleScreenShare = async () => {
-    if (isScreenSharing) {
-      stopScreenShare();
-      return;
+    setIsLocalScreenSharing(false);
+    if (!remoteScreenSharer) {
+      setActiveScreenTrack(null);
+      setScreenStream(null);
+      setIsScreenSharing(false);
     }
+    message.info('Screen sharing stopped.');
+  }, [remoteScreenSharer]);
 
-    // START SCREEN SHARING: Request tab/window/screen from browser
+  // Start presenting your own screen (Local Presenter)
+  const startLocalScreenShare = async () => {
     if (roomRef.current) {
       try {
         const pub = await roomRef.current.localParticipant.setScreenShareEnabled(true, {
@@ -1370,7 +1377,9 @@ export const OfficeSpace: React.FC = () => {
           );
         if (screenPub?.track) {
           setActiveScreenTrack(screenPub.track as VideoTrack);
+          setIsLocalScreenSharing(true);
           setIsScreenSharing(true);
+          setRemoteScreenSharer(null);
           // Ensure local microphone remains unmuted and active during screen sharing
           if (!isMuted && roomRef.current.state === 'connected') {
             roomRef.current.localParticipant.setMicrophoneEnabled(true).catch(() => {});
@@ -1382,7 +1391,7 @@ export const OfficeSpace: React.FC = () => {
               stopScreenShare();
             };
           }
-          message.success('Screen sharing started.');
+          message.success('You started presenting your screen.');
           // Auto launch Document PIP across all OS apps
           await openDocumentPip(460, 260);
           return;
@@ -1400,14 +1409,16 @@ export const OfficeSpace: React.FC = () => {
       localScreenStreamRef.current = displayStream;
       setScreenStream(displayStream);
       setActiveScreenTrack(displayStream);
+      setIsLocalScreenSharing(true);
       setIsScreenSharing(true);
+      setRemoteScreenSharer(null);
       const screenTrack = displayStream.getVideoTracks()[0];
       if (screenTrack) {
         screenTrack.onended = () => {
           stopScreenShare();
         };
       }
-      message.success('Screen sharing started.');
+      message.success('You started presenting your screen.');
       // Auto launch Document PIP across all OS apps
       await openDocumentPip(460, 260);
     } catch (err: any) {
@@ -1415,6 +1426,33 @@ export const OfficeSpace: React.FC = () => {
         message.error('Failed to start screen share.');
       }
     }
+  };
+
+  // Google Meet Style Screen Sharing Toggle:
+  // - If YOU are presenting -> clicking stops your share
+  // - If SOMEONE ELSE is presenting -> prompts before taking over
+  // - If NO ONE is presenting -> starts your share
+  const toggleScreenShare = async () => {
+    if (isLocalScreenSharing) {
+      stopScreenShare();
+      return;
+    }
+
+    if (remoteScreenSharer) {
+      Modal.confirm({
+        title: 'Share your screen instead?',
+        content: `${remoteScreenSharer.name} is currently presenting. Do you want to share your screen instead?`,
+        okText: 'Present Instead',
+        cancelText: 'Cancel',
+        okButtonProps: { style: { backgroundColor: '#2563eb' } },
+        onOk: () => {
+          startLocalScreenShare();
+        },
+      });
+      return;
+    }
+
+    await startLocalScreenShare();
   };
 
   // Avatar position on 2D map - Default spawn point at Reception Area (Cosmos Image 1)
@@ -3733,6 +3771,8 @@ export const OfficeSpace: React.FC = () => {
                 isCameraOff={isCameraOff}
                 isMuted={isMuted}
                 isScreenSharing={isScreenSharing}
+                isLocalPresenter={isLocalScreenSharing}
+                presenterName={screenPresenterName}
                 isHandRaised={isHandRaised}
                 videoStream={localVideoStreamRef.current}
                 videoTrack={localVideoTrack}
@@ -3780,6 +3820,8 @@ export const OfficeSpace: React.FC = () => {
               isCameraOff={isCameraOff}
               isMuted={isMuted}
               isScreenSharing={isScreenSharing}
+              isLocalPresenter={isLocalScreenSharing}
+              presenterName={screenPresenterName}
               isHandRaised={isHandRaised}
               videoStream={localVideoStreamRef.current}
               videoTrack={localVideoTrack}
@@ -3936,28 +3978,28 @@ export const OfficeSpace: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: isScreenSharing ? '#ffffff' : '#f8fafc',
-              backgroundColor: isScreenSharing ? '#1e293b' : 'transparent',
-              border: isScreenSharing ? '1.5px solid #3b82f6' : '1.5px solid transparent',
+              color: isLocalScreenSharing ? '#ffffff' : '#f8fafc',
+              backgroundColor: isLocalScreenSharing ? '#1e293b' : 'transparent',
+              border: isLocalScreenSharing ? '1.5px solid #3b82f6' : '1.5px solid transparent',
               borderRadius: 8,
-              padding: isScreenSharing ? '4px 10px' : '4px 0',
+              padding: isLocalScreenSharing ? '4px 10px' : '4px 0',
               minWidth: 46,
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
-            <ScreenIcon size={20} color={isScreenSharing ? '#38bdf8' : '#f8fafc'} />
+            <ScreenIcon size={20} color={isLocalScreenSharing ? '#38bdf8' : '#f8fafc'} />
             <span
               style={{
                 fontSize: 11,
                 fontWeight: 500,
                 marginTop: 4,
                 letterSpacing: '0.01em',
-                color: isScreenSharing ? '#38bdf8' : '#f8fafc',
+                color: isLocalScreenSharing ? '#38bdf8' : '#f8fafc',
               }}
             >
-              {isScreenSharing ? 'Stop Share' : 'Share'}
+              {isLocalScreenSharing ? 'Stop Share' : 'Share'}
             </span>
           </div>
         </div>
