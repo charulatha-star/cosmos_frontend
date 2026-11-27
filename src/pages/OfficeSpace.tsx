@@ -2881,35 +2881,44 @@ export const OfficeSpace: React.FC = () => {
                   const statusColor =
                     p.status === 'busy' ? '#f59e0b' : p.status === 'in_room' ? '#3b82f6' : '#10b981';
                   return (
-                    <Tooltip title={`${p.user_name || 'Teammate'} (${p.status || 'online'}) - Click to Chat`} key={p.user_id}>
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedContact({
-                            id: p.user_id,
-                            name: p.user_name || 'Teammate',
-                            email: `${(p.user_name || 'teammate').toLowerCase().replace(/\s+/g, '.')}@billiontags.com`,
-                            role: 'Employee',
-                            status: p.status,
-                          });
-                          setIsChatOpen(true);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: (p.x || 300) - 20,
-                          top: (p.y || 400) - 20,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          cursor: 'pointer',
-                          zIndex: 15,
-                          transition: 'left 0.4s ease-out, top 0.4s ease-out',
-                        }}
+                    <div
+                      key={p.user_id}
+                      style={{
+                        position: 'absolute',
+                        left: (p.x || 300) - 20,
+                        top: (p.y || 400) - 20,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        pointerEvents: 'none',
+                        zIndex: 15,
+                        transition: 'left 0.4s ease-out, top 0.4s ease-out',
+                      }}
+                    >
+                      <Badge
+                        dot
+                        status={p.status === 'online' ? 'success' : p.status === 'busy' ? 'warning' : 'processing'}
+                        offset={[-4, 32]}
+                        style={{ pointerEvents: 'none' }}
                       >
-                        <Badge
-                          dot
-                          status={p.status === 'online' ? 'success' : p.status === 'busy' ? 'warning' : 'processing'}
-                          offset={[-4, 32]}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedContact({
+                              id: p.user_id,
+                              name: p.user_name || 'Teammate',
+                              email: `${(p.user_name || 'teammate').toLowerCase().replace(/\s+/g, '.')}@billiontags.com`,
+                              role: 'Employee',
+                              status: p.status,
+                            });
+                            setIsChatOpen(true);
+                          }}
+                          style={{
+                            pointerEvents: 'auto',
+                            cursor: 'pointer',
+                            borderRadius: '50%',
+                            display: 'inline-block',
+                          }}
                         >
                           <Avatar
                             size={40}
@@ -2918,26 +2927,29 @@ export const OfficeSpace: React.FC = () => {
                               border: `2px solid ${statusColor}`,
                               backgroundColor: '#f1f5f9',
                               boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                              display: 'block',
                             }}
                           />
-                        </Badge>
-                        <div
-                          style={{
-                            marginTop: 3,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            color: '#fff',
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: '1px 7px',
-                            borderRadius: 8,
-                            whiteSpace: 'nowrap',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-                          }}
-                        >
-                          {p.user_name}
                         </div>
+                      </Badge>
+                      <div
+                        style={{
+                          marginTop: 3,
+                          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 600,
+                          padding: '1px 7px',
+                          borderRadius: 8,
+                          whiteSpace: 'nowrap',
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        {p.user_name}
                       </div>
-                    </Tooltip>
+                    </div>
                   );
                 })}
 
