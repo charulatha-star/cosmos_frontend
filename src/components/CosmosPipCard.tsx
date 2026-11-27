@@ -245,9 +245,11 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   onLeave,
   spaceName = 'cosmos.video',
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+  const [showSelfPreview, setShowSelfPreview] = useState<boolean>(false);
 
   // Fallback participants list if none provided
   const defaultParticipants: CallParticipant[] = [
@@ -264,20 +266,64 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   ];
   const effectiveParticipants = (participants && participants.length > 0) ? participants : defaultParticipants;
 
-  const toggleFullScreen = () => {
-    setIsFullScreen((prev) => !prev);
+  // Real OS/Browser Full Screen (Google Meet style)
+  const toggleFullScreen = async () => {
+    const el = containerRef.current || document.documentElement;
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if ((el as any).webkitRequestFullscreen) {
+          await (el as any).webkitRequestFullscreen();
+        }
+        setIsFullScreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        }
+        setIsFullScreen(false);
+      }
+    } catch {
+      setIsFullScreen((prev) => !prev);
+    }
   };
+
+  // Sync state when native full screen changes (Esc key, F11, or browser exit)
+  useEffect(() => {
+    const handleFsChange = () => {
+      const active = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullScreen(active);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, []);
 
   // Keyboard shortcut: Press Escape to exit full screen view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isFullScreen) {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
         setIsFullScreen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullScreen]);
+
+  // Reset self preview when screen sharing stops
+  useEffect(() => {
+    if (!isScreenSharing) {
+      setShowSelfPreview(false);
+    }
+  }, [isScreenSharing]);
 
   // Attach and play video track/stream for screen share OR camera
   useEffect(() => {
@@ -374,10 +420,11 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
 
     // Case 3: Both screen sharing and camera are off
     videoEl.srcObject = null;
-  }, [isScreenSharing, screenStream, activeScreenTrack, isCameraOff, cameraStream, videoStream, videoTrack]);
+  }, [isScreenSharing, screenStream, activeScreenTrack, isCameraOff, cameraStream, videoStream, videoTrack, showSelfPreview]);
 
   return (
     <div
+      ref={containerRef}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: isFullScreen ? 'fixed' : isPoppedOut ? 'relative' : 'absolute',
@@ -551,21 +598,175 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               justifyContent: 'center',
             }}
           >
-            {/* FULL VIEW OF SCREEN SHARE */}
+            {/* FULL VIEW OF SCREEN SHARE (Google Meet Style) */}
             {isScreenSharing ? (
               <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    backgroundColor: '#000000',
-                  }}
-                />
+                {!showSelfPreview ? (
+                  /* Google Meet Presenter State: Clean card preventing dizzying infinite mirror loop */
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      height: '100%',
+                      backgroundColor: '#0a0d17',
+                      color: '#ffffff',
+                      textAlign: 'center',
+                      padding: 24,
+                      position: 'relative',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: isFullScreen ? 80 : 56,
+                        height: isFullScreen ? 80 : 56,
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                        border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: isFullScreen ? 36 : 24,
+                        marginBottom: isFullScreen ? 18 : 10,
+                        boxShadow: '0 0 24px rgba(56, 189, 248, 0.15)',
+                      }}
+                    >
+                      🖥️
+                    </div>
+
+                    <h2
+                      style={{
+                        fontSize: isFullScreen ? 24 : 16,
+                        fontWeight: 700,
+                        margin: '0 0 6px',
+                        color: '#f8fafc',
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      You're presenting to everyone
+                    </h2>
+
+                    <p
+                      style={{
+                        fontSize: isFullScreen ? 14 : 11,
+                        color: '#94a3b8',
+                        maxWidth: 480,
+                        lineHeight: 1.5,
+                        margin: isFullScreen ? '0 0 20px' : '0 0 12px',
+                      }}
+                    >
+                      Your screen is being shared to everyone in the room. Switch to another tab or application to present your work.
+                    </p>
+
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button
+                        onClick={onToggleScreenShare}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 8,
+                          padding: isFullScreen ? '10px 22px' : '6px 14px',
+                          fontSize: isFullScreen ? 13 : 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                          transition: 'background 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ef4444')}
+                      >
+                        Stop presenting
+                      </button>
+
+                      <button
+                        onClick={() => setShowSelfPreview(true)}
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          color: '#cbd5e1',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 8,
+                          padding: isFullScreen ? '10px 18px' : '6px 12px',
+                          fontSize: isFullScreen ? 13 : 11,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+                          e.currentTarget.style.color = '#ffffff';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.color = '#cbd5e1';
+                        }}
+                      >
+                        View presentation feed
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: isFullScreen ? 24 : 12,
+                        fontSize: isFullScreen ? 12 : 10,
+                        color: '#64748b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        maxWidth: 480,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <span>💡</span>
+                      <span>To avoid the infinite tunnel mirror, choose a specific <strong>Chrome tab</strong> or <strong>Application window</strong> when sharing.</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Active video mirror when user clicks 'View presentation feed' */
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        backgroundColor: '#000000',
+                      }}
+                    />
+
+                    <button
+                      onClick={() => setShowSelfPreview(false)}
+                      style={{
+                        position: 'absolute',
+                        top: 12,
+                        right: 12,
+                        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                        borderRadius: 6,
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        backdropFilter: 'blur(4px)',
+                        zIndex: 6,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Hide presentation feed
+                    </button>
+                  </>
+                )}
 
                 {/* Top-Left Screenshare Badge */}
                 <div
@@ -590,7 +791,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   <span>{`${userName}'s Screen`}</span>
                   {isFullScreen && (
                     <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 500, marginLeft: 6 }}>
-                      (Press Esc or click Minimize to exit full view)
+                      (Press Esc to exit full view)
                     </span>
                   )}
                 </div>
