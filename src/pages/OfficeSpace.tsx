@@ -1750,21 +1750,12 @@ export const OfficeSpace: React.FC = () => {
 
   // Remote nearby participants (matching Image 2 & Image 4: e.g. empty chair if Away)
   const bgColorsList = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4'];
-  const anyRemoteVideoTrack = Object.values(remoteTracks).map((t) => t?.videoTrack).find((t) => t !== null && t !== undefined);
-  const anyRemoteAudioTrack = Object.values(remoteTracks).map((t) => t?.audioTrack).find((t) => t !== null && t !== undefined);
-
-  let activeRemoteVideoTrack = anyRemoteVideoTrack;
-  if (!activeRemoteVideoTrack && roomRef.current) {
-    roomRef.current.remoteParticipants.forEach((rp) => {
-      rp.videoTrackPublications.forEach((pub) => {
-        if (pub.track) activeRemoteVideoTrack = pub.track as VideoTrack;
-      });
-    });
-  }
 
   const remoteCallParticipants: CallParticipant[] = nearbyPresences.map((p, idx) => {
     const pAny = p as any;
     const isTeammateAway = p.status === 'offline' || pAny.status_mode === 'Away';
+
+    // 1. Direct match from subscribed tracks cache
     const directMedia =
       remoteTracks[p.user_id] ||
       (p.user_id ? remoteTracks[String(p.user_id)] : undefined) ||
@@ -1774,10 +1765,39 @@ export const OfficeSpace: React.FC = () => {
       (pAny.user_email ? remoteTracks[pAny.user_email] : undefined) ||
       (pAny.user_email ? remoteTracks[pAny.user_email.toLowerCase()] : undefined);
 
-    // Pass video and audio directly whenever available from WebRTC
-    const videoTrack = !isTeammateAway ? (directMedia?.videoTrack || activeRemoteVideoTrack || null) : null;
-    const hasVideo = !isTeammateAway && (Boolean(p.is_camera_on) || Boolean(videoTrack));
-    const audioTrack = directMedia?.audioTrack || anyRemoteAudioTrack || null;
+    // 2. Strict LiveKit participant lookup by exact identity or name
+    const matchingParticipant = roomRef.current
+      ? Array.from(roomRef.current.remoteParticipants.values()).find((rp) => {
+          return (
+            rp.identity === String(p.user_id) ||
+            rp.identity?.toLowerCase() === String(p.user_id).toLowerCase() ||
+            (p.user_name && rp.name?.toLowerCase() === p.user_name.toLowerCase()) ||
+            (pAny.user_email && rp.identity?.toLowerCase() === pAny.user_email.toLowerCase())
+          );
+        })
+      : null;
+
+    let participantCameraTrack: VideoTrack | null = null;
+    let participantAudioTrack: AudioTrack | null = null;
+
+    if (matchingParticipant) {
+      const camPub = matchingParticipant.getTrackPublication(Track.Source.Camera);
+      if (camPub?.track) {
+        participantCameraTrack = camPub.track as VideoTrack;
+      }
+      const micPub = matchingParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub?.track) {
+        participantAudioTrack = micPub.track as AudioTrack;
+      }
+    }
+
+    // STRICT 1-to-1 Track Binding: NEVER fall back to another teammate's video track!
+    const videoTrack = !isTeammateAway && (Boolean(p.is_camera_on) || Boolean(participantCameraTrack))
+      ? (participantCameraTrack || directMedia?.videoTrack || null)
+      : null;
+    const hasVideo = Boolean(videoTrack);
+
+    const audioTrack = participantAudioTrack || directMedia?.audioTrack || null;
     const isTeammateMuted = isTeammateAway || (p.is_muted === true && !audioTrack);
 
     return {

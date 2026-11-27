@@ -195,42 +195,25 @@ const ParticipantCard: React.FC<{
       } catch (err) {
         console.warn('Track attach warning:', err);
       }
-    } else if (participant.videoTrack && 'kind' in (participant.videoTrack as any)) {
-      try {
-        videoEl.srcObject = new MediaStream([participant.videoTrack as MediaStreamTrack]);
-        videoEl.play().catch(() => {});
-      } catch {}
-    } else if (participant.videoStream) {
-      videoEl.srcObject = participant.videoStream;
-      videoEl.play().catch(() => {});
-    }
-
-    const ensurePlaying = () => {
-      if (videoEl && videoEl.paused) {
-        videoEl.play().catch(() => {});
-      }
-    };
-
-    videoEl.addEventListener('loadedmetadata', ensurePlaying);
-    videoEl.addEventListener('loadeddata', ensurePlaying);
-    videoEl.addEventListener('canplay', ensurePlaying);
-    videoEl.addEventListener('pause', ensurePlaying);
-
-    const playInterval = setInterval(ensurePlaying, 500);
-
-    return () => {
-      clearInterval(playInterval);
-      videoEl.removeEventListener('loadedmetadata', ensurePlaying);
-      videoEl.removeEventListener('loadeddata', ensurePlaying);
-      videoEl.removeEventListener('canplay', ensurePlaying);
-      videoEl.removeEventListener('pause', ensurePlaying);
-      if (participant.videoTrack && 'detach' in participant.videoTrack && typeof (participant.videoTrack as any).detach === 'function') {
+      return () => {
         try {
           (participant.videoTrack as any).detach(videoEl);
         } catch {}
-      }
-      videoEl.srcObject = null;
-    };
+        videoEl.srcObject = null;
+      };
+    } else if (participant.videoStream) {
+      videoEl.srcObject = participant.videoStream;
+      videoEl.play().catch(() => {});
+      return () => {
+        videoEl.srcObject = null;
+      };
+    } else if (participant.videoTrack && 'kind' in (participant.videoTrack as any)) {
+      videoEl.srcObject = new MediaStream([participant.videoTrack as MediaStreamTrack]);
+      videoEl.play().catch(() => {});
+      return () => {
+        videoEl.srcObject = null;
+      };
+    }
   }, [participant.isCameraOn, participant.videoStream, participant.videoTrack, participant.isLocal]);
 
   const fallbackBg = participant.bgColor || (participant.isLocal ? '#ec4899' : '#3b82f6');
