@@ -66,6 +66,7 @@ import {
   RemoteParticipant,
   type RemoteTrack,
   type RemoteTrackPublication,
+  VideoPresets,
 } from 'livekit-client';
 import { useAuth } from '../context/AuthContext';
 import { presenceApi } from '../api/presence';
@@ -911,8 +912,23 @@ export const OfficeSpace: React.FC = () => {
         if (!tokenRes?.token || !tokenRes?.server_url || !isMounted) return;
 
         const room = new Room({
-          adaptiveStream: true,
-          dynacast: true,
+          adaptiveStream: false,
+          dynacast: false,
+          videoCaptureDefaults: {
+            resolution: VideoPresets.h720.resolution,
+          },
+          publishDefaults: {
+            simulcast: false,
+            videoEncoding: {
+              maxBitrate: 2_500_000,
+              maxFramerate: 30,
+            },
+            videoCodec: 'vp8',
+            screenShareEncoding: {
+              maxBitrate: 4_000_000,
+              maxFramerate: 30,
+            },
+          },
         });
         roomRef.current = room;
 
@@ -939,6 +955,19 @@ export const OfficeSpace: React.FC = () => {
             });
           } else if (pub.source === Track.Source.Microphone) {
             const aTrack = track as AudioTrack;
+            // Direct browser audio attachment: guarantees mic audio is heard regardless of active view or screen sharing
+            try {
+              const existingEl = document.getElementById(`global-audio-${participant.identity}`);
+              if (!existingEl) {
+                const audioEl = aTrack.attach();
+                audioEl.id = `global-audio-${participant.identity}`;
+                audioEl.setAttribute('data-participant-identity', participant.identity);
+                audioEl.autoplay = true;
+                document.body.appendChild(audioEl);
+              }
+            } catch (attachErr) {
+              console.warn('Native AudioTrack attach error:', attachErr);
+            }
             setRemoteTracks((prev) => {
               const updated = { ...prev };
               const id = participant.identity;
@@ -960,6 +989,13 @@ export const OfficeSpace: React.FC = () => {
           if (track === activeScreenTrackRef.current) {
             setActiveScreenTrack(null);
             setIsScreenSharing(false);
+          }
+          if (track.kind === Track.Kind.Audio) {
+            try {
+              const existingEl = document.getElementById(`global-audio-${participant?.identity}`);
+              if (existingEl) existingEl.remove();
+              (track as any).detach().forEach((el: HTMLElement) => el.remove());
+            } catch {}
           }
           if (participant) {
             const id = participant.identity;
@@ -1245,6 +1281,12 @@ export const OfficeSpace: React.FC = () => {
               await roomRef.current.localParticipant.publishTrack(track, {
                 name: 'camera',
                 source: Track.Source.Camera,
+                simulcast: false,
+                videoEncoding: {
+                  maxBitrate: 2_500_000,
+                  maxFramerate: 30,
+                },
+                videoCodec: 'vp8',
               });
             } catch (pubErr) {
               console.warn('LiveKit publishTrack error:', pubErr);
@@ -1319,6 +1361,7 @@ export const OfficeSpace: React.FC = () => {
           audio: false,
           selfBrowserSurface: 'exclude',
           surfaceSwitching: 'include',
+          resolution: { width: 1920, height: 1080, frameRate: 30 },
         });
         const screenPub =
           pub ||
@@ -1328,6 +1371,10 @@ export const OfficeSpace: React.FC = () => {
         if (screenPub?.track) {
           setActiveScreenTrack(screenPub.track as VideoTrack);
           setIsScreenSharing(true);
+          // Ensure local microphone remains unmuted and active during screen sharing
+          if (!isMuted && roomRef.current.state === 'connected') {
+            roomRef.current.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+          }
           if (screenPub.track.mediaStreamTrack) {
             const ms = new MediaStream([screenPub.track.mediaStreamTrack]);
             setScreenStream(ms);
@@ -1727,13 +1774,11 @@ export const OfficeSpace: React.FC = () => {
       (pAny.user_email ? remoteTracks[pAny.user_email] : undefined) ||
       (pAny.user_email ? remoteTracks[pAny.user_email.toLowerCase()] : undefined);
 
-    // Only enable camera if presence explicitly says is_camera_on is true AND not away!
-    const hasVideo = !isTeammateAway && Boolean(p.is_camera_on);
-    const videoTrack = hasVideo ? (directMedia?.videoTrack || activeRemoteVideoTrack) : null;
-
-    // Only unmuted if presence explicitly says is_muted is false AND not away!
-    const isTeammateMuted = isTeammateAway || p.is_muted !== false;
-    const audioTrack = !isTeammateMuted ? (directMedia?.audioTrack || anyRemoteAudioTrack) : null;
+    // Pass video and audio directly whenever available from WebRTC
+    const videoTrack = !isTeammateAway ? (directMedia?.videoTrack || activeRemoteVideoTrack || null) : null;
+    const hasVideo = !isTeammateAway && (Boolean(p.is_camera_on) || Boolean(videoTrack));
+    const audioTrack = directMedia?.audioTrack || anyRemoteAudioTrack || null;
+    const isTeammateMuted = isTeammateAway || (p.is_muted === true && !audioTrack);
 
     return {
       id: String(p.user_id),

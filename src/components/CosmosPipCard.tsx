@@ -84,7 +84,7 @@ const HandSvg = ({ size = 15, active }: { size?: number; active?: boolean }) => 
   </svg>
 );
 
-// Corner Participant Avatar / Video Tile (matching Cosmos corner people view)
+// Corner Participant Avatar / Video Tile (for compact in-map floating widget)
 const ParticipantCornerTile: React.FC<{
   participant: CallParticipant;
   localCameraStream?: MediaStream | null;
@@ -92,6 +92,7 @@ const ParticipantCornerTile: React.FC<{
   isFullScreen: boolean;
 }> = ({ participant, localCameraStream, localCameraTrack, isFullScreen }) => {
   const vidRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     const el = vidRef.current;
@@ -123,6 +124,29 @@ const ParticipantCornerTile: React.FC<{
     }
   }, [participant.isCameraOn, participant.isLocal, participant.videoStream, participant.videoTrack, localCameraStream, localCameraTrack]);
 
+  // Audio stream playback for remote participant
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl || participant.isLocal || !participant.audioTrack) return;
+
+    const aTrack = participant.audioTrack;
+    if (typeof (aTrack as any).attach === 'function') {
+      try {
+        (aTrack as any).attach(audioEl);
+      } catch {}
+      return () => {
+        try { (aTrack as any).detach(audioEl); } catch {}
+        audioEl.srcObject = null;
+      };
+    } else if (aTrack instanceof MediaStreamTrack) {
+      audioEl.srcObject = new MediaStream([aTrack]);
+      audioEl.play().catch(() => {});
+      return () => {
+        audioEl.srcObject = null;
+      };
+    }
+  }, [participant.audioTrack, participant.isLocal]);
+
   const showVideo = participant.isCameraOn && !participant.isAway && (
     participant.isLocal
       ? Boolean(localCameraStream || localCameraTrack)
@@ -147,6 +171,7 @@ const ParticipantCornerTile: React.FC<{
         transition: 'all 0.2s ease',
       }}
     >
+      {!participant.isLocal && <audio ref={audioRef} autoPlay playsInline />}
       {showVideo ? (
         <video
           ref={vidRef}
@@ -215,6 +240,189 @@ const ParticipantCornerTile: React.FC<{
               backgroundColor: '#10b981',
             }}
           />
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Google Meet Style Participant Sidebar Tile (Matching Images 2 & 6)
+const ParticipantSidebarTile: React.FC<{
+  participant: CallParticipant;
+  localCameraStream?: MediaStream | null;
+  localCameraTrack?: VideoTrack | MediaStreamTrack | null;
+}> = ({ participant, localCameraStream, localCameraTrack }) => {
+  const vidRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const el = vidRef.current;
+    if (!el || !participant.isCameraOn) return;
+
+    el.muted = true;
+    el.defaultMuted = true;
+    el.playsInline = true;
+
+    const track = participant.isLocal ? localCameraTrack : participant.videoTrack;
+    const stream = participant.isLocal ? localCameraStream : participant.videoStream;
+
+    if (track && typeof (track as any).attach === 'function') {
+      try {
+        (track as any).attach(el);
+      } catch {}
+      return () => {
+        try {
+          (track as any).detach(el);
+        } catch {}
+        el.srcObject = null;
+      };
+    } else if (stream instanceof MediaStream) {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+      return () => {
+        el.srcObject = null;
+      };
+    }
+  }, [participant.isCameraOn, participant.isLocal, participant.videoStream, participant.videoTrack, localCameraStream, localCameraTrack]);
+
+  // Audio stream playback for remote participant
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl || participant.isLocal || !participant.audioTrack) return;
+
+    const aTrack = participant.audioTrack;
+    if (typeof (aTrack as any).attach === 'function') {
+      try {
+        (aTrack as any).attach(audioEl);
+      } catch {}
+      return () => {
+        try { (aTrack as any).detach(audioEl); } catch {}
+        audioEl.srcObject = null;
+      };
+    } else if (aTrack instanceof MediaStreamTrack) {
+      audioEl.srcObject = new MediaStream([aTrack]);
+      audioEl.play().catch(() => {});
+      return () => {
+        audioEl.srcObject = null;
+      };
+    }
+  }, [participant.audioTrack, participant.isLocal]);
+
+  const showVideo = participant.isCameraOn && !participant.isAway && (
+    participant.isLocal
+      ? Boolean(localCameraStream || localCameraTrack)
+      : Boolean(participant.videoStream || participant.videoTrack)
+  );
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 140,
+        maxHeight: 280,
+        borderRadius: 14,
+        backgroundColor: '#111526',
+        border: '1.5px solid rgba(255, 255, 255, 0.12)',
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45)',
+      }}
+    >
+      {!participant.isLocal && <audio ref={audioRef} autoPlay playsInline />}
+      {showVideo ? (
+        <video
+          ref={vidRef}
+          autoPlay
+          playsInline
+          muted
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'radial-gradient(circle at center, #1e2640 0%, #0d111d 100%)',
+          }}
+        >
+          <img
+            src={getAvatarUrl({ name: participant.name, avatar_seed: participant.avatarSeed } as any)}
+            alt={participant.name}
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              backgroundColor: '#f8fafc',
+              border: '2.5px solid #ffffff',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Google Meet Style Name Tag (Bottom-Left) */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 10,
+          bottom: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          borderRadius: 6,
+          padding: '3px 8px',
+          backdropFilter: 'blur(6px)',
+          maxWidth: 'calc(100% - 60px)',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#f8fafc',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {participant.name} {participant.isLocal ? '(You)' : ''}
+        </span>
+      </div>
+
+      {/* Google Meet Style Mic Status (Top-Right) */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 10,
+          top: 10,
+          width: 26,
+          height: 26,
+          borderRadius: '50%',
+          backgroundColor: participant.isMuted ? 'rgba(239, 68, 68, 0.9)' : 'rgba(15, 23, 42, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+        }}
+      >
+        {participant.isMuted ? (
+          <MicSlashSvg size={13} color="#ffffff" />
+        ) : (
+          <AudioOutlined style={{ fontSize: 13, color: '#10b981' }} />
         )}
       </div>
     </div>
@@ -590,235 +798,281 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               width: '100%',
               height: isFullScreen ? 'calc(100vh - 84px)' : isPoppedOut ? 'calc(100% - 76px)' : 240,
               minHeight: isFullScreen ? 'calc(100vh - 84px)' : 180,
-              backgroundColor: '#000000',
+              backgroundColor: '#0a0d17',
               position: 'relative',
               overflow: 'hidden',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              flexDirection: isFullScreen ? 'row' : 'column',
+              padding: isFullScreen ? '14px 20px' : 0,
+              gap: isFullScreen ? 16 : 0,
+              boxSizing: 'border-box',
             }}
           >
             {/* FULL VIEW OF SCREEN SHARE (Google Meet Style) */}
             {isScreenSharing ? (
               <>
-                {!showSelfPreview ? (
-                  /* Google Meet Presenter State: Clean card preventing dizzying infinite mirror loop */
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: '#0a0d17',
-                      color: '#ffffff',
-                      textAlign: 'center',
-                      padding: 24,
-                      position: 'relative',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: isFullScreen ? 80 : 56,
-                        height: isFullScreen ? 80 : 56,
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                        border: '1.5px solid rgba(56, 189, 248, 0.35)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: isFullScreen ? 36 : 24,
-                        marginBottom: isFullScreen ? 18 : 10,
-                        boxShadow: '0 0 24px rgba(56, 189, 248, 0.15)',
-                      }}
-                    >
-                      🖥️
-                    </div>
-
-                    <h2
-                      style={{
-                        fontSize: isFullScreen ? 24 : 16,
-                        fontWeight: 700,
-                        margin: '0 0 6px',
-                        color: '#f8fafc',
-                        letterSpacing: '-0.01em',
-                      }}
-                    >
-                      You're presenting to everyone
-                    </h2>
-
-                    <p
-                      style={{
-                        fontSize: isFullScreen ? 14 : 11,
-                        color: '#94a3b8',
-                        maxWidth: 480,
-                        lineHeight: 1.5,
-                        margin: isFullScreen ? '0 0 20px' : '0 0 12px',
-                      }}
-                    >
-                      Your screen is being shared to everyone in the room. Switch to another tab or application to present your work.
-                    </p>
-
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-                      <button
-                        onClick={onToggleScreenShare}
-                        style={{
-                          backgroundColor: '#ef4444',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: 8,
-                          padding: isFullScreen ? '10px 22px' : '6px 14px',
-                          fontSize: isFullScreen ? 13 : 11,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                          transition: 'background 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ef4444')}
-                      >
-                        Stop presenting
-                      </button>
-
-                      <button
-                        onClick={() => setShowSelfPreview(true)}
-                        style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                          color: '#cbd5e1',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: 8,
-                          padding: isFullScreen ? '10px 18px' : '6px 12px',
-                          fontSize: isFullScreen ? 13 : 11,
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          transition: 'all 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
-                          e.currentTarget.style.color = '#ffffff';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                          e.currentTarget.style.color = '#cbd5e1';
-                        }}
-                      >
-                        View presentation feed
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: isFullScreen ? 24 : 12,
-                        fontSize: isFullScreen ? 12 : 10,
-                        color: '#64748b',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        maxWidth: 480,
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <span>💡</span>
-                      <span>To avoid the infinite tunnel mirror, choose a specific <strong>Chrome tab</strong> or <strong>Application window</strong> when sharing.</span>
-                    </div>
-                  </div>
-                ) : (
-                  /* Active video mirror when user clicks 'View presentation feed' */
-                  <>
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        backgroundColor: '#000000',
-                      }}
-                    />
-
-                    <button
-                      onClick={() => setShowSelfPreview(false)}
-                      style={{
-                        position: 'absolute',
-                        top: 12,
-                        right: 12,
-                        backgroundColor: 'rgba(15, 23, 42, 0.88)',
-                        color: '#38bdf8',
-                        border: '1px solid rgba(56, 189, 248, 0.3)',
-                        borderRadius: 6,
-                        padding: '4px 10px',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        backdropFilter: 'blur(4px)',
-                        zIndex: 6,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Hide presentation feed
-                    </button>
-                  </>
-                )}
-
-                {/* Top-Left Screenshare Badge */}
+                {/* Main Presentation Area (Left in Fullscreen, Full in Mini PIP) */}
                 <div
                   style={{
-                    position: 'absolute',
-                    left: 12,
-                    top: 12,
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                    color: '#38bdf8',
-                    fontSize: isFullScreen ? 12 : 10,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    backdropFilter: 'blur(4px)',
+                    flex: 1,
+                    height: '100%',
+                    position: 'relative',
+                    borderRadius: isFullScreen ? 14 : 0,
+                    overflow: 'hidden',
+                    backgroundColor: '#000000',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
-                    zIndex: 5,
+                    justifyContent: 'center',
+                    boxShadow: isFullScreen ? '0 10px 30px rgba(0,0,0,0.6)' : 'none',
                   }}
                 >
-                  <span style={{ fontSize: 13 }}>🖥️</span>
-                  <span>{`${userName}'s Screen`}</span>
-                  {isFullScreen && (
-                    <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 500, marginLeft: 6 }}>
-                      (Press Esc to exit full view)
-                    </span>
+                  {!showSelfPreview ? (
+                    /* Google Meet Presenter State: Clean card preventing dizzying infinite mirror loop */
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: '#0a0d17',
+                        color: '#ffffff',
+                        textAlign: 'center',
+                        padding: 24,
+                        position: 'relative',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: isFullScreen ? 80 : 56,
+                          height: isFullScreen ? 80 : 56,
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                          border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: isFullScreen ? 36 : 24,
+                          marginBottom: isFullScreen ? 18 : 10,
+                          boxShadow: '0 0 24px rgba(56, 189, 248, 0.15)',
+                        }}
+                      >
+                        🖥️
+                      </div>
+
+                      <h2
+                        style={{
+                          fontSize: isFullScreen ? 24 : 16,
+                          fontWeight: 700,
+                          margin: '0 0 6px',
+                          color: '#f8fafc',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        You're presenting to everyone
+                      </h2>
+
+                      <p
+                        style={{
+                          fontSize: isFullScreen ? 14 : 11,
+                          color: '#94a3b8',
+                          maxWidth: 480,
+                          lineHeight: 1.5,
+                          margin: isFullScreen ? '0 0 20px' : '0 0 12px',
+                        }}
+                      >
+                        Your screen is being shared to everyone in the room. Switch to another tab or application to present your work.
+                      </p>
+
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <button
+                          onClick={onToggleScreenShare}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 8,
+                            padding: isFullScreen ? '10px 22px' : '6px 14px',
+                            fontSize: isFullScreen ? 13 : 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ef4444')}
+                        >
+                          Stop presenting
+                        </button>
+
+                        <button
+                          onClick={() => setShowSelfPreview(true)}
+                          style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            color: '#cbd5e1',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 8,
+                            padding: isFullScreen ? '10px 18px' : '6px 12px',
+                            fontSize: isFullScreen ? 13 : 11,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+                            e.currentTarget.style.color = '#ffffff';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                            e.currentTarget.style.color = '#cbd5e1';
+                          }}
+                        >
+                          View presentation feed
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: isFullScreen ? 24 : 12,
+                          fontSize: isFullScreen ? 12 : 10,
+                          color: '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          maxWidth: 480,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <span>💡</span>
+                        <span>To avoid the infinite tunnel mirror, choose a specific <strong>Chrome tab</strong> or <strong>Application window</strong> when sharing.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Active video mirror when user clicks 'View presentation feed' */
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          backgroundColor: '#000000',
+                        }}
+                      />
+
+                      <button
+                        onClick={() => setShowSelfPreview(false)}
+                        style={{
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                          color: '#38bdf8',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          borderRadius: 6,
+                          padding: '4px 10px',
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          backdropFilter: 'blur(4px)',
+                          zIndex: 6,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Hide presentation feed
+                      </button>
+                    </>
+                  )}
+
+                  {/* Top-Left Screenshare Badge */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 12,
+                      top: 12,
+                      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                      color: '#38bdf8',
+                      fontSize: isFullScreen ? 12 : 10,
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      backdropFilter: 'blur(4px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      zIndex: 5,
+                    }}
+                  >
+                    <span style={{ fontSize: 13 }}>🖥️</span>
+                    <span>{`${userName}'s Screen`}</span>
+                    {isFullScreen && (
+                      <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 500, marginLeft: 6 }}>
+                        (Press Esc to exit full view)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Compact Floating Corner Overlay when NOT in Fullscreen */}
+                  {!isFullScreen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        bottom: 10,
+                        display: 'flex',
+                        gap: 8,
+                        alignItems: 'flex-end',
+                        zIndex: 10,
+                        pointerEvents: 'auto',
+                      }}
+                    >
+                      {effectiveParticipants.map((p) => (
+                        <ParticipantCornerTile
+                          key={p.id}
+                          participant={p}
+                          localCameraStream={cameraStream}
+                          localCameraTrack={videoTrack}
+                          isFullScreen={false}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {/* LAST CORNER: Show People Avatar / Face Tile (Matching User Requirement) */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: isFullScreen ? 24 : 10,
-                    bottom: isFullScreen ? 24 : 10,
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'flex-end',
-                    zIndex: 10,
-                    pointerEvents: 'auto',
-                  }}
-                >
-                  {effectiveParticipants.map((p) => (
-                    <ParticipantCornerTile
-                      key={p.id}
-                      participant={p}
-                      localCameraStream={cameraStream}
-                      localCameraTrack={videoTrack}
-                      isFullScreen={isFullScreen}
-                    />
-                  ))}
-                </div>
+                {/* Google Meet Sidebar: Right Column of Participants (Matching Images 2 & 6) */}
+                {isFullScreen && (
+                  <div
+                    style={{
+                      width: 280,
+                      minWidth: 240,
+                      maxWidth: 340,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                      overflowY: 'auto',
+                      paddingRight: 2,
+                    }}
+                  >
+                    {effectiveParticipants.map((p) => (
+                      <ParticipantSidebarTile
+                        key={p.id}
+                        participant={p}
+                        localCameraStream={cameraStream}
+                        localCameraTrack={videoTrack}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               /* Camera ON or 3D Avatar Character when not screen sharing */
