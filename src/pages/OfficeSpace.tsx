@@ -83,14 +83,14 @@ const OFFICE_ZONES = [
   // 1. Cabin 2 (Top Left)
   { id: 'cabin-2', name: 'Cabin 2', x: 80, y: 60, width: 380, height: 230, type: 'cabin' },
 
-  // 2. Cabin 1 (Top Center)
-  { id: 'cabin-1', name: 'Cabin 1', x: 500, y: 60, width: 400, height: 220, type: 'cabin' },
+  // 2. Cabin 3 (Top Center)
+  { id: 'cabin-3', name: 'Cabin 3', x: 500, y: 60, width: 400, height: 220, type: 'cabin' },
 
   // 3. War Room (Top Right)
   { id: 'war-room', name: 'War Room', x: 940, y: 60, width: 370, height: 390, type: 'cabin' },
 
-  // 4. Cabin 3 (Middle Left)
-  { id: 'cabin-3', name: 'Cabin 3', x: 80, y: 320, width: 380, height: 240, type: 'cabin' },
+  // 4. Cabin 1 (Middle Left)
+  { id: 'cabin-1', name: 'Cabin 1', x: 80, y: 320, width: 380, height: 240, type: 'cabin' },
 
   // 5. Cabin 4 (Bottom Right - Upper Room, strictly separate)
   { id: 'cabin-4', name: 'Cabin 4', x: 960, y: 480, width: 350, height: 185, type: 'cabin' },
