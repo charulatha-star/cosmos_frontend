@@ -80,11 +80,11 @@ import type { PresenceUpdate, User, Message as ChatMessageType } from '../types'
 
 // Exact floor plan zones matching user recommendation
 const OFFICE_ZONES = [
-  // 1. Cabin 1 (Top Left)
-  { id: 'cabin-1', name: 'Cabin 1', x: 80, y: 60, width: 380, height: 230, type: 'cabin' },
+  // 1. Cabin 2 (Top Left)
+  { id: 'cabin-2', name: 'Cabin 2', x: 80, y: 60, width: 380, height: 230, type: 'cabin' },
 
-  // 2. Cabin 2 (Top Center)
-  { id: 'cabin-2', name: 'Cabin 2', x: 500, y: 60, width: 400, height: 220, type: 'cabin' },
+  // 2. Cabin 1 (Top Center)
+  { id: 'cabin-1', name: 'Cabin 1', x: 500, y: 60, width: 400, height: 220, type: 'cabin' },
 
   // 3. War Room (Top Right)
   { id: 'war-room', name: 'War Room', x: 940, y: 60, width: 370, height: 390, type: 'cabin' },
@@ -98,10 +98,10 @@ const OFFICE_ZONES = [
   // 6. Cabin 5 (Bottom Right - Lower Room, strictly separate)
   { id: 'cabin-5', name: 'Cabin 5', x: 960, y: 690, width: 350, height: 185, type: 'cabin' },
 
-  // 7. Reception Area / Default Spawn Point (Bottom Center Lounge)
-  { id: 'reception', name: 'Reception Area', x: 500, y: 690, width: 420, height: 185, type: 'reception' },
+  // 7. Reception Area / Default Spawn Point (Bottom Left Lounge)
+  { id: 'reception', name: 'Reception Area', x: 80, y: 590, width: 380, height: 270, type: 'reception' },
 
-  // 9. 20 Individual Workstation Desks (4 Rows x 5 Seats) in Central Floor
+  // 8. 30 Individual Workstation Desks (6 Rows x 5 Seats) extending into Central Floor
   // Row 1 (y: 315)
   { id: 'desk-1', name: 'Desk 1', x: 500, y: 315, width: 72, height: 50, type: 'desk' },
   { id: 'desk-2', name: 'Desk 2', x: 585, y: 315, width: 72, height: 50, type: 'desk' },
@@ -109,26 +109,40 @@ const OFFICE_ZONES = [
   { id: 'desk-4', name: 'Desk 4', x: 755, y: 315, width: 72, height: 50, type: 'desk' },
   { id: 'desk-5', name: 'Desk 5', x: 840, y: 315, width: 72, height: 50, type: 'desk' },
 
-  // Row 2 (y: 405)
-  { id: 'desk-6', name: 'Desk 6', x: 500, y: 405, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-7', name: 'Desk 7', x: 585, y: 405, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-8', name: 'Desk 8', x: 670, y: 405, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-9', name: 'Desk 9', x: 755, y: 405, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-10', name: 'Desk 10', x: 840, y: 405, width: 72, height: 50, type: 'desk' },
+  // Row 2 (y: 415)
+  { id: 'desk-6', name: 'Desk 6', x: 500, y: 415, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-7', name: 'Desk 7', x: 585, y: 415, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-8', name: 'Desk 8', x: 670, y: 415, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-9', name: 'Desk 9', x: 755, y: 415, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-10', name: 'Desk 10', x: 840, y: 415, width: 72, height: 50, type: 'desk' },
 
-  // Row 3 (y: 495)
-  { id: 'desk-11', name: 'Desk 11', x: 500, y: 495, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-12', name: 'Desk 12', x: 585, y: 495, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-13', name: 'Desk 13', x: 670, y: 495, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-14', name: 'Desk 14', x: 755, y: 495, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-15', name: 'Desk 15', x: 840, y: 495, width: 72, height: 50, type: 'desk' },
+  // Row 3 (y: 515)
+  { id: 'desk-11', name: 'Desk 11', x: 500, y: 515, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-12', name: 'Desk 12', x: 585, y: 515, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-13', name: 'Desk 13', x: 670, y: 515, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-14', name: 'Desk 14', x: 755, y: 515, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-15', name: 'Desk 15', x: 840, y: 515, width: 72, height: 50, type: 'desk' },
 
-  // Row 4 (y: 585)
-  { id: 'desk-16', name: 'Desk 16', x: 500, y: 585, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-17', name: 'Desk 17', x: 585, y: 585, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-18', name: 'Desk 18', x: 670, y: 585, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-19', name: 'Desk 19', x: 755, y: 585, width: 72, height: 50, type: 'desk' },
-  { id: 'desk-20', name: 'Desk 20', x: 840, y: 585, width: 72, height: 50, type: 'desk' },
+  // Row 4 (y: 615)
+  { id: 'desk-16', name: 'Desk 16', x: 500, y: 615, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-17', name: 'Desk 17', x: 585, y: 615, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-18', name: 'Desk 18', x: 670, y: 615, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-19', name: 'Desk 19', x: 755, y: 615, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-20', name: 'Desk 20', x: 840, y: 615, width: 72, height: 50, type: 'desk' },
+
+  // Row 5 (y: 715)
+  { id: 'desk-21', name: 'Desk 21', x: 500, y: 715, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-22', name: 'Desk 22', x: 585, y: 715, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-23', name: 'Desk 23', x: 670, y: 715, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-24', name: 'Desk 24', x: 755, y: 715, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-25', name: 'Desk 25', x: 840, y: 715, width: 72, height: 50, type: 'desk' },
+
+  // Row 6 (y: 815)
+  { id: 'desk-26', name: 'Desk 26', x: 500, y: 815, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-27', name: 'Desk 27', x: 585, y: 815, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-28', name: 'Desk 28', x: 670, y: 815, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-29', name: 'Desk 29', x: 755, y: 815, width: 72, height: 50, type: 'desk' },
+  { id: 'desk-30', name: 'Desk 30', x: 840, y: 815, width: 72, height: 50, type: 'desk' },
 ];
 
 const MicSlashIcon = ({ size = 20 }: { size?: number }) => (
@@ -1357,7 +1371,7 @@ export const OfficeSpace: React.FC = () => {
   };
 
   // Avatar position on 2D map - Default spawn point at Reception Area (Cosmos Image 1)
-  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 705, y: 775 });
+  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 270, y: 725 });
   const [targetPos, setTargetPos] = useState<{ x: number; y: number } | null>(null);
   const [isWalking, setIsWalking] = useState<boolean>(false);
   const [facingDirection, setFacingDirection] = useState<'left' | 'right'>('right');
@@ -1458,8 +1472,8 @@ export const OfficeSpace: React.FC = () => {
         // Only spawn in the Reception Area on entry so all users arrive at Reception first
         if (spawnedSpaceRef.current !== currentSpace) {
           spawnedSpaceRef.current = currentSpace;
-          const RECEPTION_X = 705;
-          const RECEPTION_Y = 775;
+          const RECEPTION_X = 270;
+          const RECEPTION_Y = 725;
           setMyPos({ x: RECEPTION_X, y: RECEPTION_Y });
           setTargetPos(null);
           setActiveZone('Reception Area');
@@ -2810,7 +2824,7 @@ export const OfficeSpace: React.FC = () => {
                         </div>
 
                         {/* Plant on edge desks */}
-                        {(zone.id === 'desk-1' || zone.id === 'desk-5' || zone.id === 'desk-16' || zone.id === 'desk-20') && (
+                        {(zone.id === 'desk-1' || zone.id === 'desk-5' || zone.id === 'desk-26' || zone.id === 'desk-30') && (
                           <div
                             style={{
                               position: 'absolute',
@@ -2997,7 +3011,7 @@ export const OfficeSpace: React.FC = () => {
                 <Tooltip title="Recenter Avatar" placement="left">
                   <div
                     onClick={() => {
-                      setMyPos({ x: 705, y: 775 });
+                      setMyPos({ x: 270, y: 725 });
                       setTargetPos(null);
                     }}
                     style={{
