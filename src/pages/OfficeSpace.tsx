@@ -3675,6 +3675,7 @@ export const OfficeSpace: React.FC = () => {
                 cameraStream={cameraStream}
                 screenStream={screenStream}
                 activeScreenTrack={activeScreenTrack}
+                participants={activeCallParticipants}
                 onToggleMute={toggleMicrophone}
                 onToggleCamera={toggleCamera}
                 onToggleScreenShare={toggleScreenShare}
@@ -3721,6 +3722,7 @@ export const OfficeSpace: React.FC = () => {
               cameraStream={cameraStream}
               screenStream={screenStream}
               activeScreenTrack={activeScreenTrack}
+              participants={activeCallParticipants}
               onToggleMute={toggleMicrophone}
               onToggleCamera={toggleCamera}
               onToggleScreenShare={toggleScreenShare}

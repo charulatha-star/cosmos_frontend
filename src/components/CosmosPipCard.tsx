@@ -4,6 +4,7 @@ import {
   AudioOutlined,
   VideoCameraOutlined,
   FullscreenOutlined,
+  FullscreenExitOutlined,
   DownOutlined,
   UpOutlined,
   CloseOutlined,
@@ -12,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import type { VideoTrack, AudioTrack, Track } from 'livekit-client';
 import { getAvatarUrl } from './CosmosProfileStatusModal';
+import type { CallParticipant } from './CosmosCallSection';
 
 interface CosmosPipCardProps {
   userName: string;
@@ -26,6 +28,7 @@ interface CosmosPipCardProps {
   videoStream?: MediaStream | null;
   videoTrack?: VideoTrack | MediaStreamTrack | null;
   audioTrack?: AudioTrack | MediaStreamTrack | null;
+  participants?: CallParticipant[];
   onToggleMute: () => void;
   onToggleCamera: () => void;
   onToggleScreenShare: () => void;
@@ -81,6 +84,143 @@ const HandSvg = ({ size = 15, active }: { size?: number; active?: boolean }) => 
   </svg>
 );
 
+// Corner Participant Avatar / Video Tile (matching Cosmos corner people view)
+const ParticipantCornerTile: React.FC<{
+  participant: CallParticipant;
+  localCameraStream?: MediaStream | null;
+  localCameraTrack?: VideoTrack | MediaStreamTrack | null;
+  isFullScreen: boolean;
+}> = ({ participant, localCameraStream, localCameraTrack, isFullScreen }) => {
+  const vidRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = vidRef.current;
+    if (!el || !participant.isCameraOn) return;
+
+    el.muted = true;
+    el.defaultMuted = true;
+    el.playsInline = true;
+
+    const track = participant.isLocal ? localCameraTrack : participant.videoTrack;
+    const stream = participant.isLocal ? localCameraStream : participant.videoStream;
+
+    if (track && typeof (track as any).attach === 'function') {
+      try {
+        (track as any).attach(el);
+      } catch {}
+      return () => {
+        try {
+          (track as any).detach(el);
+        } catch {}
+        el.srcObject = null;
+      };
+    } else if (stream instanceof MediaStream) {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+      return () => {
+        el.srcObject = null;
+      };
+    }
+  }, [participant.isCameraOn, participant.isLocal, participant.videoStream, participant.videoTrack, localCameraStream, localCameraTrack]);
+
+  const showVideo = participant.isCameraOn && !participant.isAway && (
+    participant.isLocal
+      ? Boolean(localCameraStream || localCameraTrack)
+      : Boolean(participant.videoStream || participant.videoTrack)
+  );
+
+  return (
+    <div
+      style={{
+        width: isFullScreen ? 120 : 84,
+        height: isFullScreen ? 96 : 64,
+        borderRadius: 10,
+        backgroundColor: '#111526',
+        border: '1.5px solid rgba(255, 255, 255, 0.25)',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.65)',
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backdropFilter: 'blur(8px)',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      {showVideo ? (
+        <video
+          ref={vidRef}
+          autoPlay
+          playsInline
+          muted
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      ) : (
+        <img
+          src={getAvatarUrl({ name: participant.name, avatar_seed: participant.avatarSeed } as any)}
+          alt={participant.name}
+          style={{
+            width: isFullScreen ? 54 : 38,
+            height: isFullScreen ? 54 : 38,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            backgroundColor: '#f8fafc',
+            border: '2px solid #ffffff',
+            boxShadow: '0 3px 10px rgba(0,0,0,0.3)',
+          }}
+        />
+      )}
+
+      {/* Name and Mic Indicator Pill */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 4,
+          bottom: 4,
+          right: 4,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          borderRadius: 4,
+          padding: '2px 5px',
+          backdropFilter: 'blur(4px)',
+        }}
+      >
+        <span
+          style={{
+            fontSize: isFullScreen ? 11 : 9,
+            fontWeight: 700,
+            color: '#ffffff',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: isFullScreen ? 75 : 48,
+          }}
+        >
+          {participant.name}
+        </span>
+        {participant.isMuted ? (
+          <MicSlashSvg size={isFullScreen ? 11 : 9} color="#ef4444" />
+        ) : (
+          <div
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   userName,
   userAvatarSeed,
@@ -93,6 +233,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   activeScreenTrack,
   videoStream,
   videoTrack,
+  participants,
   onToggleMute,
   onToggleCamera,
   onToggleScreenShare,
@@ -105,8 +246,38 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
   spaceName = 'cosmos.video',
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+
+  // Fallback participants list if none provided
+  const defaultParticipants: CallParticipant[] = [
+    {
+      id: 'local',
+      name: userName || 'You',
+      isLocal: true,
+      isCameraOn: !isCameraOff,
+      isMuted,
+      avatarSeed: userAvatarSeed,
+      videoStream: cameraStream || videoStream,
+      videoTrack,
+    },
+  ];
+  const effectiveParticipants = (participants && participants.length > 0) ? participants : defaultParticipants;
+
+  const toggleFullScreen = () => {
+    setIsFullScreen((prev) => !prev);
+  };
+
+  // Keyboard shortcut: Press Escape to exit full screen view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
 
   // Attach and play video track/stream for screen share OR camera
   useEffect(() => {
@@ -205,70 +376,38 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
     videoEl.srcObject = null;
   }, [isScreenSharing, screenStream, activeScreenTrack, isCameraOff, cameraStream, videoStream, videoTrack]);
 
-  // When dual tile mode is active (both camera and screen share active):
-  // Attach camera stream to cameraVideoRef
-  useEffect(() => {
-    const camEl = cameraVideoRef.current;
-    if (!camEl || isCameraOff || !isScreenSharing) return;
-
-    camEl.muted = true;
-    camEl.defaultMuted = true;
-    camEl.playsInline = true;
-
-    if (videoTrack && 'attach' in videoTrack && typeof (videoTrack as any).attach === 'function') {
-      try {
-        (videoTrack as any).attach(camEl);
-      } catch {}
-      return () => {
-        try {
-          (videoTrack as any).detach(camEl);
-        } catch {}
-        camEl.srcObject = null;
-      };
-    } else {
-      const stream =
-        (cameraStream instanceof MediaStream ? cameraStream : null) ||
-        (videoStream instanceof MediaStream ? videoStream : null);
-      if (stream) {
-        camEl.srcObject = stream;
-        camEl.play().catch(() => {});
-        return () => {
-          camEl.srcObject = null;
-        };
-      }
-    }
-  }, [isCameraOff, isScreenSharing, cameraStream, videoStream, videoTrack]);
-
   return (
     <div
       onClick={(e) => e.stopPropagation()}
       style={{
-        position: isPoppedOut ? 'relative' : 'absolute',
-        right: isPoppedOut ? 'auto' : 24,
-        bottom: isPoppedOut ? 'auto' : 24,
-        width: isPoppedOut ? '100%' : (isScreenSharing && !isCameraOff ? 440 : 320),
-        height: isPoppedOut ? '100%' : 'auto',
+        position: isFullScreen ? 'fixed' : isPoppedOut ? 'relative' : 'absolute',
+        top: isFullScreen ? 0 : 'auto',
+        left: isFullScreen ? 0 : 'auto',
+        right: isFullScreen ? 0 : isPoppedOut ? 'auto' : 24,
+        bottom: isFullScreen ? 0 : isPoppedOut ? 'auto' : 24,
+        width: isFullScreen ? '100vw' : isPoppedOut ? '100%' : (isScreenSharing ? 460 : 320),
+        height: isFullScreen ? '100vh' : isPoppedOut ? '100%' : 'auto',
         backgroundColor: '#0c0d19',
-        border: isPoppedOut ? 'none' : '1.5px solid #22293e',
-        borderRadius: isPoppedOut ? 0 : 14,
-        boxShadow: isPoppedOut ? 'none' : '0 16px 40px rgba(0, 0, 0, 0.45)',
+        border: isFullScreen || isPoppedOut ? 'none' : '1.5px solid #22293e',
+        borderRadius: isFullScreen || isPoppedOut ? 0 : 14,
+        boxShadow: isFullScreen || isPoppedOut ? 'none' : '0 16px 40px rgba(0, 0, 0, 0.45)',
         overflow: 'hidden',
-        zIndex: 40,
+        zIndex: isFullScreen ? 9999 : 40,
         display: 'flex',
         flexDirection: 'column',
-        transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1), height 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
-      {/* 1. Header Bar: cosmos.video + audio waves + popout + minimize + close */}
+      {/* 1. Header Bar: space name + audio waves + popout + fullscreen + minimize + close */}
       <div
         style={{
-          height: 32,
+          height: 34,
           backgroundColor: '#111526',
           borderBottom: '1px solid #1e2438',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 12px',
+          padding: '0 14px',
           userSelect: 'none',
         }}
       >
@@ -277,6 +416,11 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
           <span style={{ color: '#e2e8f0', letterSpacing: '0.02em' }}>
             {spaceName} {isScreenSharing ? '• Sharing' : ''}
           </span>
+          {isFullScreen && (
+            <span style={{ color: '#38bdf8', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>
+              [FULL SCREEN VIEW]
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -312,7 +456,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
           </div>
 
           {/* Picture-in-Picture Pop-out button (floats outside browser across all apps) */}
-          {onPopOutPip && (
+          {onPopOutPip && !isFullScreen && (
             <Tooltip title={isPoppedOut ? 'Bring back into browser' : 'Float on top of all windows (Picture-in-Picture)'}>
               <div
                 onClick={onPopOutPip}
@@ -332,8 +476,31 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
             </Tooltip>
           )}
 
+          {/* Full Screen View Toggle (Marked by user arrow in Image 4!) */}
+          <Tooltip title={isFullScreen ? 'Exit Full Screen (Esc)' : 'Whole Screen Full View'}>
+            <div
+              onClick={toggleFullScreen}
+              style={{
+                cursor: 'pointer',
+                color: isFullScreen ? '#38bdf8' : '#94a3b8',
+                display: 'flex',
+                alignItems: 'center',
+                padding: 2,
+                borderRadius: 4,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = isFullScreen ? '#38bdf8' : '#94a3b8')}
+            >
+              {isFullScreen ? (
+                <FullscreenExitOutlined style={{ fontSize: 13 }} />
+              ) : (
+                <FullscreenOutlined style={{ fontSize: 13 }} />
+              )}
+            </div>
+          </Tooltip>
+
           {/* Minimize / Expand Toggle */}
-          {!isPoppedOut && (
+          {!isPoppedOut && !isFullScreen && (
             <div
               onClick={() => setIsMinimized(!isMinimized)}
               style={{
@@ -374,125 +541,18 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
           <div
             style={{
               width: '100%',
-              height: isPoppedOut ? 'calc(100% - 76px)' : 190,
-              minHeight: 180,
-              backgroundColor: (isScreenSharing || !isCameraOff) ? '#000000' : '#f472b6',
+              height: isFullScreen ? 'calc(100vh - 84px)' : isPoppedOut ? 'calc(100% - 76px)' : 240,
+              minHeight: isFullScreen ? 'calc(100vh - 84px)' : 180,
+              backgroundColor: '#000000',
               position: 'relative',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: (isScreenSharing && !isCameraOff) ? 6 : 0,
-              gap: (isScreenSharing && !isCameraOff) ? 6 : 0,
             }}
           >
-            {/* DUAL TILE LAYOUT (When both Screen Share AND Camera are active matching Cosmos Image 2) */}
-            {isScreenSharing && !isCameraOff ? (
-              <>
-                {/* Tile 1: Camera Feed */}
-                <div
-                  style={{
-                    flex: 1,
-                    height: '100%',
-                    position: 'relative',
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    backgroundColor: '#111526',
-                    border: '1px solid #1e293b',
-                  }}
-                >
-                  <video
-                    ref={cameraVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                    }}
-                  />
-                  {/* Name tag overlay */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 6,
-                      bottom: 6,
-                      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                      color: '#ffffff',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      backdropFilter: 'blur(4px)',
-                    }}
-                  >
-                    {userName || 'You'}
-                  </div>
-                  {/* Green online dot */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      right: 6,
-                      bottom: 6,
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: '#10b981',
-                      border: '1.5px solid #ffffff',
-                    }}
-                  />
-                </div>
-
-                {/* Tile 2: Screen Share Feed */}
-                <div
-                  style={{
-                    flex: 1,
-                    height: '100%',
-                    position: 'relative',
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    backgroundColor: '#000000',
-                    border: '1px solid #1e293b',
-                  }}
-                >
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      backgroundColor: '#000000',
-                    }}
-                  />
-                  {/* Screenshare tag overlay */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 6,
-                      bottom: 6,
-                      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                      color: '#38bdf8',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      backdropFilter: 'blur(4px)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <span>🖥️</span>
-                    <span>{`${userName}'s Screenshare`}</span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* SINGLE TILE LAYOUT: Camera or Screen Share or 3D Character */
+            {/* FULL VIEW OF SCREEN SHARE */}
+            {isScreenSharing ? (
               <>
                 <video
                   ref={videoRef}
@@ -502,13 +562,81 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: isScreenSharing ? 'contain' : 'cover',
+                    objectFit: 'contain',
                     backgroundColor: '#000000',
-                    display: (isScreenSharing || !isCameraOff) ? 'block' : 'none',
                   }}
                 />
 
-                {!isScreenSharing && isCameraOff && (
+                {/* Top-Left Screenshare Badge */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 12,
+                    top: 12,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    color: '#38bdf8',
+                    fontSize: isFullScreen ? 12 : 10,
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    zIndex: 5,
+                  }}
+                >
+                  <span style={{ fontSize: 13 }}>🖥️</span>
+                  <span>{`${userName}'s Screen`}</span>
+                  {isFullScreen && (
+                    <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 500, marginLeft: 6 }}>
+                      (Press Esc or click Minimize to exit full view)
+                    </span>
+                  )}
+                </div>
+
+                {/* LAST CORNER: Show People Avatar / Face Tile (Matching User Requirement) */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: isFullScreen ? 24 : 10,
+                    bottom: isFullScreen ? 24 : 10,
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'flex-end',
+                    zIndex: 10,
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  {effectiveParticipants.map((p) => (
+                    <ParticipantCornerTile
+                      key={p.id}
+                      participant={p}
+                      localCameraStream={cameraStream}
+                      localCameraTrack={videoTrack}
+                      isFullScreen={isFullScreen}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              /* Camera ON or 3D Avatar Character when not screen sharing */
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    backgroundColor: '#000000',
+                    display: !isCameraOff ? 'block' : 'none',
+                  }}
+                />
+
+                {isCameraOff && (
                   <img
                     src={getAvatarUrl({ name: userName, avatar_seed: userAvatarSeed } as any)}
                     alt="Avatar Character"
@@ -521,7 +649,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   />
                 )}
 
-                {/* Stage Bottom-Left Overlay: Mic status + Cam status + Name / Screen Tag */}
+                {/* Stage Bottom-Left Overlay: Mic status + Cam status + Name */}
                 <div
                   style={{
                     position: 'absolute',
@@ -566,25 +694,15 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   <div
                     style={{
                       backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                      color: isScreenSharing ? '#38bdf8' : '#ffffff',
+                      color: '#ffffff',
                       fontSize: 11,
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: 6,
                       backdropFilter: 'blur(4px)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
                     }}
                   >
-                    {isScreenSharing ? (
-                      <>
-                        <span>🖥️</span>
-                        <span>{`${userName}'s Screenshare`}</span>
-                      </>
-                    ) : (
-                      userName || 'You'
-                    )}
+                    {userName || 'You'}
                   </div>
                 </div>
 
@@ -610,12 +728,13 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
           {/* 3. Bottom Mini Toolbar (matching Cosmos Image 1) */}
           <div
             style={{
-              height: 44,
+              height: 48,
               backgroundColor: '#0c0d19',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-around',
-              padding: '0 8px',
+              justifyContent: 'center',
+              gap: 12,
+              padding: '0 16px',
               borderTop: '1px solid #1a2035',
             }}
           >
@@ -623,8 +742,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
             <Tooltip title="Your Profile">
               <div
                 style={{
-                  width: 26,
-                  height: 26,
+                  width: 28,
+                  height: 28,
                   borderRadius: '50%',
                   overflow: 'hidden',
                   border: '1.5px solid #f59e0b',
@@ -638,7 +757,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                 <img
                   src={getAvatarUrl({ name: userName, avatar_seed: userAvatarSeed } as any)}
                   alt="avatar"
-                  style={{ width: '100%', height: '100%' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               </div>
             </Tooltip>
@@ -648,8 +767,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               <div
                 onClick={onToggleMute}
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   borderRadius: 6,
                   display: 'flex',
                   alignItems: 'center',
@@ -668,8 +787,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               <div
                 onClick={onToggleCamera}
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   borderRadius: 6,
                   display: 'flex',
                   alignItems: 'center',
@@ -688,8 +807,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               <div
                 onClick={onToggleScreenShare}
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   borderRadius: 6,
                   display: 'flex',
                   alignItems: 'center',
@@ -708,8 +827,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               <div
                 onClick={onToggleHand}
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   borderRadius: 6,
                   display: 'flex',
                   alignItems: 'center',
@@ -723,14 +842,41 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
               </div>
             </Tooltip>
 
-            {/* Expand View */}
+            {/* Full Screen Toggle in Toolbar */}
+            <Tooltip title={isFullScreen ? 'Exit Full Screen' : 'Whole Screen Full View'}>
+              <div
+                onClick={toggleFullScreen}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: isFullScreen ? '#38bdf8' : '#94a3b8',
+                  backgroundColor: isFullScreen ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = isFullScreen ? '#38bdf8' : '#94a3b8')}
+              >
+                {isFullScreen ? (
+                  <FullscreenExitOutlined style={{ fontSize: 16 }} />
+                ) : (
+                  <FullscreenOutlined style={{ fontSize: 16 }} />
+                )}
+              </div>
+            </Tooltip>
+
+            {/* Expand to Call Tab Mode */}
             {onExpandToCall && (
               <Tooltip title="Expand to Call Mode">
                 <div
                   onClick={onExpandToCall}
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 30,
+                    height: 30,
                     borderRadius: 6,
                     display: 'flex',
                     alignItems: 'center',
@@ -742,7 +888,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
                 >
-                  <FullscreenOutlined style={{ fontSize: 15 }} />
+                  <DesktopOutlined style={{ fontSize: 14 }} />
                 </div>
               </Tooltip>
             )}
@@ -753,8 +899,8 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                 <div
                   onClick={onLeave}
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 30,
+                    height: 30,
                     borderRadius: 6,
                     display: 'flex',
                     alignItems: 'center',
@@ -766,7 +912,7 @@ export const CosmosPipCard: React.FC<CosmosPipCardProps> = ({
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)')}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  <LogoutOutlined style={{ fontSize: 14, color: '#ef4444' }} />
+                  <LogoutOutlined style={{ fontSize: 15, color: '#ef4444' }} />
                 </div>
               </Tooltip>
             )}
