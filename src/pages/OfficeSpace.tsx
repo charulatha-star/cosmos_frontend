@@ -45,12 +45,9 @@ import {
   HomeOutlined,
   CopyOutlined,
   BellOutlined,
-  PushpinOutlined,
-  FolderOutlined,
   CloseOutlined,
   SendOutlined,
   SmileOutlined,
-  PaperClipOutlined,
   BoldOutlined,
   ItalicOutlined,
   UnderlineOutlined,
@@ -571,6 +568,8 @@ export const OfficeSpace: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false);
+  const [isFormatBarOpen, setIsFormatBarOpen] = useState<boolean>(true);
+  const roomChatInputRef = useRef<any>(null);
 
   // Real Hardware WebRTC & LiveKit States
   const roomRef = useRef<Room | null>(null);
@@ -1727,7 +1726,191 @@ export const OfficeSpace: React.FC = () => {
 
   // Format insertion helper for rich text buttons
   const insertFormat = (before: string, after: string = '') => {
-    setRoomChatInput((prev) => `${prev}${before}${after}`);
+    const inputElement = roomChatInputRef.current?.resizableTextArea?.textArea || roomChatInputRef.current;
+    if (inputElement && typeof inputElement.selectionStart === 'number') {
+      const start = inputElement.selectionStart;
+      const end = inputElement.selectionEnd;
+      const currentVal = roomChatInput;
+      const selected = currentVal.substring(start, end);
+
+      if (selected) {
+        const newVal = currentVal.substring(0, start) + before + selected + after + currentVal.substring(end);
+        setRoomChatInput(newVal);
+        setTimeout(() => {
+          inputElement.focus();
+          inputElement.setSelectionRange(start + before.length, start + before.length + selected.length);
+        }, 0);
+      } else {
+        const placeholder =
+          before === '**'
+            ? 'bold text'
+            : before === '*'
+            ? 'italic text'
+            : before === '<u>'
+            ? 'underlined text'
+            : before === '~~'
+            ? 'strikethrough text'
+            : before === '`'
+            ? 'code'
+            : '';
+        const insertText = placeholder ? `${before}${placeholder}${after}` : `${before}${after}`;
+        const newVal = currentVal.substring(0, start) + insertText + currentVal.substring(end);
+        setRoomChatInput(newVal);
+        setTimeout(() => {
+          inputElement.focus();
+          if (placeholder) {
+            inputElement.setSelectionRange(start + before.length, start + before.length + placeholder.length);
+          } else {
+            inputElement.setSelectionRange(start + before.length, start + before.length);
+          }
+        }, 0);
+      }
+    } else {
+      setRoomChatInput((prev) => `${prev}${before}${after}`);
+    }
+  };
+
+  // Helper to render inline formatting: bold, italic, underline, strike, code, links
+  const renderInlineText = (text: string, keyPrefix: string) => {
+    if (!text) return null;
+    const TOKEN_REGEX =
+      /(\[.*?\]\(https?:\/\/[^\s\)]+\)|https?:\/\/[^\s]+|<u>[\s\S]*?<\/u>|__[\s\S]*?__|\*\*[\s\S]*?\*\*|~~[\s\S]*?~~|`[\s\S]*?`|\*[^\*]+?\*)/g;
+    const parts = text.split(TOKEN_REGEX);
+
+    return parts.map((part, idx) => {
+      if (!part) return null;
+      const k = `${keyPrefix}-${idx}`;
+
+      // Link: [text](url)
+      const linkMatch = part.match(/^\[(.*?)\]\((https?:\/\/[^\s\)]+)\)$/);
+      if (linkMatch) {
+        return (
+          <a
+            key={k}
+            href={linkMatch[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#2563eb', textDecoration: 'underline' }}
+          >
+            {linkMatch[1]}
+          </a>
+        );
+      }
+
+      // Bare URL
+      if (/^https?:\/\/[^\s]+$/.test(part)) {
+        return (
+          <a
+            key={k}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#2563eb', textDecoration: 'underline' }}
+          >
+            {part}
+          </a>
+        );
+      }
+
+      // Underline: <u>text</u> or __text__
+      const uMatch = part.match(/^<u>([\s\S]*?)<\/u>$/) || part.match(/^__([\s\S]*?)__$/);
+      if (uMatch) {
+        return (
+          <span key={k} style={{ textDecoration: 'underline' }}>
+            {uMatch[1]}
+          </span>
+        );
+      }
+
+      // Bold: **text**
+      const bMatch = part.match(/^\*\*([\s\S]*?)\*\*$/);
+      if (bMatch) {
+        return (
+          <strong key={k} style={{ fontWeight: 700, color: '#0f172a' }}>
+            {bMatch[1]}
+          </strong>
+        );
+      }
+
+      // Strikethrough: ~~text~~
+      const sMatch = part.match(/^~~([\s\S]*?)~~$/);
+      if (sMatch) {
+        return (
+          <span key={k} style={{ textDecoration: 'line-through', opacity: 0.8 }}>
+            {sMatch[1]}
+          </span>
+        );
+      }
+
+      // Code: `code`
+      const cMatch = part.match(/^`([\s\S]*?)`$/);
+      if (cMatch) {
+        return (
+          <code
+            key={k}
+            style={{
+              backgroundColor: '#f1f5f9',
+              padding: '2px 5px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: '#0f172a',
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            {cMatch[1]}
+          </code>
+        );
+      }
+
+      // Italic: *text*
+      const iMatch = part.match(/^\*([^\*]+?)\*$/);
+      if (iMatch) {
+        return (
+          <em key={k} style={{ fontStyle: 'italic' }}>
+            {iMatch[1]}
+          </em>
+        );
+      }
+
+      return <span key={k}>{part}</span>;
+    });
+  };
+
+  // Helper to render multiline messages with bullet lists and numbered lists
+  const renderFormattedText = (rawText: string) => {
+    if (!rawText) return null;
+    const lines = rawText.split('\n');
+
+    return lines.map((line, lineIdx) => {
+      // Bullet list: • or * or -
+      const bulletMatch = line.match(/^[\u2022\*\-]\s+(.*)$/);
+      if (bulletMatch) {
+        return (
+          <div key={lineIdx} style={{ display: 'flex', gap: 6, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
+            <span style={{ color: '#64748b', fontWeight: 700 }}>•</span>
+            <div>{renderInlineText(bulletMatch[1], `b-${lineIdx}`)}</div>
+          </div>
+        );
+      }
+
+      // Numbered list: 1. , 2. 
+      const numMatch = line.match(/^(\d+\.)\s+(.*)$/);
+      if (numMatch) {
+        return (
+          <div key={lineIdx} style={{ display: 'flex', gap: 6, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
+            <span style={{ color: '#64748b', fontWeight: 600 }}>{numMatch[1]}</span>
+            <div>{renderInlineText(numMatch[2], `n-${lineIdx}`)}</div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={lineIdx} style={{ minHeight: line === '' ? 8 : undefined, lineHeight: 1.45 }}>
+          {renderInlineText(line, `l-${lineIdx}`)}
+        </div>
+      );
+    });
   };
 
   // File upload & attachment handler for room chat
@@ -1760,7 +1943,7 @@ export const OfficeSpace: React.FC = () => {
     e.target.value = '';
   };
 
-  // Parser for messages with file transfers / attachments
+  // Parser for messages with file transfers / attachments & rich text formatting
   const renderMessageContent = (rawText: string) => {
     let parsed: any = null;
     if (rawText && rawText.startsWith('{') && rawText.includes('__cosmos_file__')) {
@@ -1776,7 +1959,7 @@ export const OfficeSpace: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {parsed.text && (
             <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.4 }}>
-              {parsed.text}
+              {renderFormattedText(parsed.text)}
             </div>
           )}
           {isImage ? (
@@ -1832,7 +2015,7 @@ export const OfficeSpace: React.FC = () => {
 
     return (
       <div style={{ fontSize: 13, color: '#334155', marginTop: 2, lineHeight: 1.4 }}>
-        {rawText}
+        {renderFormattedText(rawText)}
       </div>
     );
   };
@@ -3775,8 +3958,6 @@ export const OfficeSpace: React.FC = () => {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#64748b' }}>
                       <Tooltip title="Notifications (Click to test / enable)"><BellOutlined onClick={handleEnableNotifications} style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                      <Tooltip title="Pinned"><PushpinOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                      <Tooltip title="Files"><FolderOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
                       <Tooltip title="Close chat">
                         <CloseOutlined
                           onClick={() => setIsCallChatOpen(false)}
@@ -3854,16 +4035,18 @@ export const OfficeSpace: React.FC = () => {
                       }}
                     >
                       {/* Formatting Tools (Bold, Italic, Underline, Strikethrough, List, Number, Code, Link) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
-                        <Tooltip title="Bold"><BoldOutlined onClick={() => insertFormat('**', '**')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Italic"><ItalicOutlined onClick={() => insertFormat('*', '*')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Underline"><UnderlineOutlined onClick={() => insertFormat('<u>', '</u>')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Strikethrough"><StrikethroughOutlined onClick={() => insertFormat('~~', '~~')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Bullet List"><UnorderedListOutlined onClick={() => insertFormat('\n• ')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Numbered List"><OrderedListOutlined onClick={() => insertFormat('\n1. ')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Code"><CodeOutlined onClick={() => insertFormat('`', '`')} style={{ cursor: 'pointer' }} /></Tooltip>
-                        <Tooltip title="Link"><LinkOutlined onClick={() => insertFormat('[link text](https://)')} style={{ cursor: 'pointer' }} /></Tooltip>
-                      </div>
+                      {isFormatBarOpen && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                          <Tooltip title="Bold"><BoldOutlined onClick={() => insertFormat('**', '**')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Italic"><ItalicOutlined onClick={() => insertFormat('*', '*')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Underline"><UnderlineOutlined onClick={() => insertFormat('<u>', '</u>')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Strikethrough"><StrikethroughOutlined onClick={() => insertFormat('~~', '~~')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Bullet List"><UnorderedListOutlined onClick={() => insertFormat('\n• ')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Numbered List"><OrderedListOutlined onClick={() => insertFormat('\n1. ')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Code"><CodeOutlined onClick={() => insertFormat('`', '`')} style={{ cursor: 'pointer' }} /></Tooltip>
+                          <Tooltip title="Link"><LinkOutlined onClick={() => insertFormat('[link text](https://)')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        </div>
+                      )}
 
                       {/* Attached File Preview Card (Matching Cosmos Image 2) */}
                       {attachedFile && (
@@ -3912,6 +4095,7 @@ export const OfficeSpace: React.FC = () => {
 
                       {/* Input Area */}
                       <Input.TextArea
+                        ref={roomChatInputRef}
                         value={roomChatInput}
                         onChange={(e) => setRoomChatInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -3936,19 +4120,32 @@ export const OfficeSpace: React.FC = () => {
                             onChange={handleFileSelect}
                             accept="image/*,.pdf,.doc,.docx,.txt,.zip"
                           />
-                          <Tooltip title="Attach image or document">
+                          <Tooltip title="Attach image or document (+)">
                             <PlusOutlined
                               onClick={() => fileInputRef.current?.click()}
                               style={{ cursor: 'pointer', fontSize: 14, color: attachedFile ? '#38bdf8' : '#64748b' }}
                             />
                           </Tooltip>
-                          <Tooltip title="Attach file">
-                            <PaperClipOutlined
-                              onClick={() => fileInputRef.current?.click()}
-                              style={{ cursor: 'pointer', color: attachedFile ? '#38bdf8' : '#64748b' }}
-                            />
+
+                          {/* Aa Format Bar Toggle */}
+                          <Tooltip title={isFormatBarOpen ? 'Hide formatting tools' : 'Show formatting tools (Aa)'}>
+                            <span
+                              onClick={() => setIsFormatBarOpen((prev) => !prev)}
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                backgroundColor: isFormatBarOpen ? '#e2e8f0' : 'transparent',
+                                color: isFormatBarOpen ? '#0f172a' : '#64748b',
+                                transition: 'all 0.15s ease',
+                                userSelect: 'none',
+                              }}
+                            >
+                              Aa
+                            </span>
                           </Tooltip>
-                          <span style={{ fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Aa</span>
 
                           {/* Emoji Picker Popover */}
                           <Popover
