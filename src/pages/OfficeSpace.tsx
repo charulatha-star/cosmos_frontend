@@ -569,6 +569,7 @@ export const OfficeSpace: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false);
   const [isFormatBarOpen, setIsFormatBarOpen] = useState<boolean>(true);
+  const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
   const roomChatInputRef = useRef<any>(null);
 
   // Real Hardware WebRTC & LiveKit States
@@ -1770,159 +1771,124 @@ export const OfficeSpace: React.FC = () => {
     }
   };
 
-  // Helper to render inline formatting: bold, italic, underline, strike, code, links
-  const renderInlineText = (text: string, keyPrefix: string) => {
-    if (!text) return null;
-    const TOKEN_REGEX =
-      /(\[.*?\]\(https?:\/\/[^\s\)]+\)|https?:\/\/[^\s]+|<u>[\s\S]*?<\/u>|__[\s\S]*?__|\*\*[\s\S]*?\*\*|~~[\s\S]*?~~|`[\s\S]*?`|\*[^\*]+?\*)/g;
-    const parts = text.split(TOKEN_REGEX);
+  // Safe HTML generator for all markdown tokens (Bold, Italic, Underline, Strike, Code, Lists, Links)
+  const formatMarkdownToHtml = (text: string): string => {
+    if (!text) return '';
 
-    return parts.map((part, idx) => {
-      if (!part) return null;
-      const k = `${keyPrefix}-${idx}`;
+    // 1. Escape HTML
+    let escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
 
-      // Link: [text](url)
-      const linkMatch = part.match(/^\[(.*?)\]\((https?:\/\/[^\s\)]+)\)$/);
-      if (linkMatch) {
-        return (
-          <a
-            key={k}
-            href={linkMatch[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: '#2563eb', textDecoration: 'underline' }}
-          >
-            {linkMatch[1]}
-          </a>
-        );
-      }
+    // 2. Restore allowed <u> tags
+    escaped = escaped.replace(/&lt;u&gt;/gi, '<u>').replace(/&lt;\/u&gt;/gi, '</u>');
 
-      // Bare URL
-      if (/^https?:\/\/[^\s]+$/.test(part)) {
-        return (
-          <a
-            key={k}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: '#2563eb', textDecoration: 'underline' }}
-          >
-            {part}
-          </a>
-        );
-      }
-
-      // Underline: <u>text</u> or __text__
-      const uMatch = part.match(/^<u>([\s\S]*?)<\/u>$/) || part.match(/^__([\s\S]*?)__$/);
-      if (uMatch) {
-        return (
-          <span key={k} style={{ textDecoration: 'underline' }}>
-            {uMatch[1]}
-          </span>
-        );
-      }
-
-      // Bold: **text**
-      const bMatch = part.match(/^\*\*([\s\S]*?)\*\*$/);
-      if (bMatch) {
-        return (
-          <strong key={k} style={{ fontWeight: 700, color: '#0f172a' }}>
-            {bMatch[1]}
-          </strong>
-        );
-      }
-
-      // Strikethrough: ~~text~~
-      const sMatch = part.match(/^~~([\s\S]*?)~~$/);
-      if (sMatch) {
-        return (
-          <span key={k} style={{ textDecoration: 'line-through', opacity: 0.8 }}>
-            {sMatch[1]}
-          </span>
-        );
-      }
-
-      // Code: `code`
-      const cMatch = part.match(/^`([\s\S]*?)`$/);
-      if (cMatch) {
-        return (
-          <code
-            key={k}
-            style={{
-              backgroundColor: '#f1f5f9',
-              padding: '2px 5px',
-              borderRadius: 4,
-              fontSize: 12,
-              fontFamily: 'monospace',
-              color: '#0f172a',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            {cMatch[1]}
-          </code>
-        );
-      }
-
-      // Italic: *text*
-      const iMatch = part.match(/^\*([^\*]+?)\*$/);
-      if (iMatch) {
-        return (
-          <em key={k} style={{ fontStyle: 'italic' }}>
-            {iMatch[1]}
-          </em>
-        );
-      }
-
-      return <span key={k}>{part}</span>;
+    // 3. Links: [text](url)
+    escaped = escaped.replace(/\[(.*?)\]\((https?:\/\/[^\s\)]*)\)/gi, (_match, txt, url) => {
+      const href = url || '#';
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">${txt || url}</a>`;
     });
-  };
 
-  // Helper to render multiline messages with bullet lists and numbered lists
-  const renderFormattedText = (rawText: string) => {
-    if (!rawText) return null;
-    const lines = rawText.split('\n');
+    // 4. Standalone URLs: https://...
+    escaped = escaped.replace(/(^|[^">])(https?:\/\/[^\s<]+)/gi, (_match, prefix, url) => {
+      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">${url}</a>`;
+    });
 
-    return lines.map((line, lineIdx) => {
-      // Bullet list: • or * or -
-      const bulletMatch = line.match(/^[\u2022\*\-]\s+(.*)$/);
+    // 5. Code: `code`
+    escaped = escaped.replace(
+      /`([^`]+)`/g,
+      '<code style="background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #0f172a; border: 1px solid #e2e8f0;">$1</code>'
+    );
+
+    // 6. Bold: **text**
+    escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 700; color: #0f172a;">$1</strong>');
+
+    // 7. Strikethrough: ~~text~~
+    escaped = escaped.replace(/~~(.*?)~~/g, '<span style="text-decoration: line-through; opacity: 0.8;">$1</span>');
+
+    // 8. Underline double underscore: __text__
+    escaped = escaped.replace(/__(.*?)__/g, '<span style="text-decoration: underline;">$1</span>');
+
+    // 9. Italic: *text*
+    escaped = escaped.replace(/\*([^\*]+?)\*/g, '<em style="font-style: italic;">$1</em>');
+
+    // 10. Underline tag: <u>text</u> (supports nesting inside bold/italic!)
+    escaped = escaped.replace(/<u>(.*?)<\/u>/gi, '<span style="text-decoration: underline;">$1</span>');
+
+    // 11. Bullet & Numbered list lines
+    const lines = escaped.split('\n');
+    const formattedLines = lines.map((line) => {
+      const bulletMatch = line.match(/^([\u2022\*\-])\s+(.*)$/);
       if (bulletMatch) {
-        return (
-          <div key={lineIdx} style={{ display: 'flex', gap: 6, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
-            <span style={{ color: '#64748b', fontWeight: 700 }}>•</span>
-            <div>{renderInlineText(bulletMatch[1], `b-${lineIdx}`)}</div>
-          </div>
-        );
+        return `<div style="display: flex; gap: 8px; padding-left: 10px; margin-top: 2px; margin-bottom: 2px;"><span style="color: #64748b; font-weight: 700;">•</span><div>${bulletMatch[2]}</div></div>`;
       }
-
-      // Numbered list: 1. , 2. 
       const numMatch = line.match(/^(\d+\.)\s+(.*)$/);
       if (numMatch) {
-        return (
-          <div key={lineIdx} style={{ display: 'flex', gap: 6, paddingLeft: 8, marginTop: 2, marginBottom: 2 }}>
-            <span style={{ color: '#64748b', fontWeight: 600 }}>{numMatch[1]}</span>
-            <div>{renderInlineText(numMatch[2], `n-${lineIdx}`)}</div>
-          </div>
-        );
+        return `<div style="display: flex; gap: 8px; padding-left: 10px; margin-top: 2px; margin-bottom: 2px;"><span style="color: #64748b; font-weight: 600;">${numMatch[1]}</span><div>${numMatch[2]}</div></div>`;
       }
-
-      return (
-        <div key={lineIdx} style={{ minHeight: line === '' ? 8 : undefined, lineHeight: 1.45 }}>
-          {renderInlineText(line, `l-${lineIdx}`)}
-        </div>
-      );
+      return `<div style="min-height: ${line === '' ? '8px' : 'auto'}; line-height: 1.5;">${line}</div>`;
     });
+
+    return formattedLines.join('');
   };
 
-  // File upload & attachment handler for room chat
+  // File upload & attachment handler with client-side image compression
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      message.error('File size exceeds 10MB limit');
+    if (file.size > 15 * 1024 * 1024) {
+      message.error('File size exceeds 15MB limit');
       return;
     }
 
+    // Auto-compress images client-side for lightning-fast sending
+    if (file.type && file.type.startsWith('image/')) {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const maxDim = 1200;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, w, h);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const approxBytes = Math.round((compressedDataUrl.length * 3) / 4);
+        const sizeStr =
+          approxBytes < 1024 * 1024
+            ? `${Math.round(approxBytes / 1024)} KB`
+            : `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+        setAttachedFile({
+          name: file.name.replace(/\.[^/.]+$/, '') + '.jpg',
+          sizeStr,
+          sizeBytes: approxBytes,
+          type: 'image/jpeg',
+          dataUrl: compressedDataUrl,
+        });
+      };
+      img.src = objectUrl;
+      e.target.value = '';
+      return;
+    }
+
+    // Documents (PDF, Word, TXT, ZIP)
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
@@ -1958,9 +1924,10 @@ export const OfficeSpace: React.FC = () => {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {parsed.text && (
-            <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.4 }}>
-              {renderFormattedText(parsed.text)}
-            </div>
+            <div
+              style={{ fontSize: 13, color: '#334155', lineHeight: 1.4 }}
+              dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(parsed.text) }}
+            />
           )}
           {isImage ? (
             <div style={{ marginTop: 4 }}>
@@ -1976,13 +1943,16 @@ export const OfficeSpace: React.FC = () => {
                   cursor: 'pointer',
                   backgroundColor: '#f8fafc',
                 }}
-                onClick={() => {
-                  const w = window.open('');
-                  w?.document.write(`<img src="${f.dataUrl}" style="max-width:100%"/>`);
-                }}
+                onClick={() => setPreviewLightboxUrl(f.dataUrl)}
               />
               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                {f.name} ({f.sizeStr})
+                {f.name} ({f.sizeStr}) ·{' '}
+                <span
+                  style={{ textDecoration: 'underline', cursor: 'pointer', color: '#2563eb' }}
+                  onClick={() => setPreviewLightboxUrl(f.dataUrl)}
+                >
+                  Click to view
+                </span>
               </div>
             </div>
           ) : (
@@ -2014,9 +1984,10 @@ export const OfficeSpace: React.FC = () => {
     }
 
     return (
-      <div style={{ fontSize: 13, color: '#334155', marginTop: 2, lineHeight: 1.4 }}>
-        {renderFormattedText(rawText)}
-      </div>
+      <div
+        style={{ fontSize: 13, color: '#334155', marginTop: 2, lineHeight: 1.4 }}
+        dangerouslySetInnerHTML={{ __html: formatMarkdownToHtml(rawText) }}
+      />
     );
   };
 
@@ -2089,20 +2060,40 @@ export const OfficeSpace: React.FC = () => {
         })
       : text;
 
-    setIsSendingRoomMsg(true);
+    // Reset input fields immediately for zero-delay UI feel
     setRoomChatInput('');
     setAttachedFile(null);
+
+    // Optimistic UI update: Insert message immediately into room chat
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: any = {
+      id: tempId,
+      sender_id: user?.id || 'me',
+      sender_name: user?.name || 'You',
+      sender_role: user?.role || 'Employee',
+      text: messagePayload,
+      timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      is_direct: false,
+    };
+
+    setRoomMessages((prev) => [...prev, optimisticMsg]);
+    prevMsgCountRef.current += 1;
+    setTimeout(() => {
+      roomChatScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+
+    setIsSendingRoomMsg(true);
     try {
       const newMsg = await chatApi.sendRoomMessage(roomId, messagePayload);
       if (newMsg) {
-        setRoomMessages((prev) => [...prev, newMsg]);
-        prevMsgCountRef.current += 1;
-        setTimeout(() => {
-          roomChatScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 80);
+        setRoomMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? newMsg : m))
+        );
       }
     } catch (e) {
-      message.error('Failed to send room message');
+      console.warn('Background sync notice for room message:', e);
+      // Keep optimistic message visible in chat list so user doesn't lose content
     } finally {
       setIsSendingRoomMsg(false);
     }
@@ -4741,6 +4732,67 @@ export const OfficeSpace: React.FC = () => {
         onClose={() => setIsChatOpen(false)}
         selectedContact={selectedContact}
       />
+
+      {/* Lightbox Image Preview Modal (In-page preview with above cross to cancel/close) */}
+      {previewLightboxUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.88)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(6px)',
+          }}
+          onClick={() => setPreviewLightboxUrl(null)}
+        >
+          {/* Above Cross Button to Cancel/Close */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewLightboxUrl(null);
+            }}
+            style={{
+              position: 'absolute',
+              top: 24,
+              right: 28,
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#ffffff',
+              fontSize: 22,
+              transition: 'all 0.15s ease',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.45)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)')}
+            title="Close image preview"
+          >
+            <CloseOutlined />
+          </div>
+
+          {/* Full Size Image */}
+          <img
+            src={previewLightboxUrl}
+            alt="Preview"
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '88vh',
+              objectFit: 'contain',
+              borderRadius: 8,
+              boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* ========================================================
           COSMOS NAVIGATION MODALS (Images 2 & 4)
