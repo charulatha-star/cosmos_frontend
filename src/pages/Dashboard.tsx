@@ -93,8 +93,8 @@ export const Dashboard: React.FC = () => {
       disabled: true,
       label: (
         <div>
-          <div style={{ fontWeight: 600 }}>{user?.name || 'Guest 470'}</div>
-          <div style={{ fontSize: 12, color: '#888' }}>{user?.email || 'kuma1412002@gmail.com'}</div>
+          <div style={{ fontWeight: 600 }}>{user?.name || 'Guest'}</div>
+          <div style={{ fontSize: 12, color: '#888' }}>{user?.email || ''}</div>
         </div>
       ),
     },
@@ -210,10 +210,10 @@ export const Dashboard: React.FC = () => {
             />
             <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
-                {user?.name || 'Guest 470'}
+                {user?.name || 'Guest'}
               </div>
               <div style={{ fontSize: 10, color: '#64748b' }}>
-                {user?.email || 'kuma1412002@gmail.com'}
+                {user?.email || ''}
               </div>
             </div>
             <DownOutlined style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }} />
@@ -226,10 +226,10 @@ export const Dashboard: React.FC = () => {
         {/* Welcome Header */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <Title level={2} style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 32 }}>
-            Welcome {user?.name || 'Guest 470'}!
+            Welcome {user?.name || 'Guest'}!
           </Title>
           <Text style={{ fontSize: 15, color: '#64748b', display: 'block', marginTop: 8 }}>
-            Your spaces for {user?.email || 'kuma1412002@gmail.com'}
+            Your spaces {user?.email ? `for ${user.email}` : ''}
           </Text>
 
           {/* Search Space Input */}

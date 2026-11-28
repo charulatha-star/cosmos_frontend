@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Modal, Input, Button, Checkbox, message } from 'antd';
 import { UserOutlined, DownOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +16,7 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
 }) => {
   const { loginWithGoogle } = useAuth();
   const [step, setStep] = useState<'email' | 'password'>('email');
-  const [email, setEmail] = useState<string>('kuma1412002@gmail.com');
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -24,9 +24,16 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
 
   const resetModal = () => {
     setStep('email');
+    setEmail('');
     setPassword('');
     setErrorMsg(null);
   };
+
+  useEffect(() => {
+    if (open) {
+      resetModal();
+    }
+  }, [open]);
 
   const handleClose = () => {
     resetModal();
