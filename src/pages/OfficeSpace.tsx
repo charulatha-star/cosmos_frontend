@@ -570,7 +570,25 @@ export const OfficeSpace: React.FC = () => {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false);
   const [isFormatBarOpen, setIsFormatBarOpen] = useState<boolean>(true);
   const [previewLightboxUrl, setPreviewLightboxUrl] = useState<string | null>(null);
-  const roomChatInputRef = useRef<any>(null);
+  const roomChatEditorRef = useRef<HTMLDivElement>(null);
+  const [isEditorEmpty, setIsEditorEmpty] = useState<boolean>(true);
+  const [activeFormats, setActiveFormats] = useState<{
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    strike: boolean;
+    list: boolean;
+    numList: boolean;
+    code: boolean;
+  }>({
+    bold: false,
+    italic: false,
+    underline: false,
+    strike: false,
+    list: false,
+    numList: false,
+    code: false,
+  });
 
   // Real Hardware WebRTC & LiveKit States
   const roomRef = useRef<Room | null>(null);
@@ -734,7 +752,6 @@ export const OfficeSpace: React.FC = () => {
 
   // In-Meeting Room Chat States (Cosmos Images 2 & 5)
   const [roomMessages, setRoomMessages] = useState<ChatMessageType[]>([]);
-  const [roomChatInput, setRoomChatInput] = useState<string>('');
   const [isSendingRoomMsg, setIsSendingRoomMsg] = useState<boolean>(false);
   const [floatingRoomToast, setFloatingRoomToast] = useState<{
     roomName: string;
@@ -1725,50 +1742,59 @@ export const OfficeSpace: React.FC = () => {
       ? activeZone
       : 'Meeting Room 1';
 
-  // Format insertion helper for rich text buttons
-  const insertFormat = (before: string, after: string = '') => {
-    const inputElement = roomChatInputRef.current?.resizableTextArea?.textArea || roomChatInputRef.current;
-    if (inputElement && typeof inputElement.selectionStart === 'number') {
-      const start = inputElement.selectionStart;
-      const end = inputElement.selectionEnd;
-      const currentVal = roomChatInput;
-      const selected = currentVal.substring(start, end);
+  // Synchronize active formatting states from the contentEditable editor
+  const syncActiveFormats = () => {
+    try {
+      setActiveFormats({
+        bold: document.queryCommandState('bold'),
+        italic: document.queryCommandState('italic'),
+        underline: document.queryCommandState('underline'),
+        strike: document.queryCommandState('strikeThrough'),
+        list: document.queryCommandState('insertUnorderedList'),
+        numList: document.queryCommandState('insertOrderedList'),
+        code: document.queryCommandValue('fontName') === 'monospace',
+      });
+    } catch (e) {}
 
-      if (selected) {
-        const newVal = currentVal.substring(0, start) + before + selected + after + currentVal.substring(end);
-        setRoomChatInput(newVal);
-        setTimeout(() => {
-          inputElement.focus();
-          inputElement.setSelectionRange(start + before.length, start + before.length + selected.length);
-        }, 0);
+    const text = roomChatEditorRef.current?.innerText?.trim() || '';
+    const hasMedia = Boolean(
+      roomChatEditorRef.current?.querySelector('img, a, code, b, strong, i, em, u, s')
+    );
+    setIsEditorEmpty(!text && !hasMedia);
+  };
+
+  // WYSIWYG Format toggle helper matching Cosmos Video
+  const applyFormat = (command: string, value: string | undefined = undefined) => {
+    roomChatEditorRef.current?.focus();
+    if (command === 'code') {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) {
+        document.execCommand(
+          'insertHTML',
+          false,
+          `<code style="background-color:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px;color:#0f172a;border:1px solid #e2e8f0;">${sel.toString()}</code>`
+        );
       } else {
-        const placeholder =
-          before === '**'
-            ? 'bold text'
-            : before === '*'
-            ? 'italic text'
-            : before === '<u>'
-            ? 'underlined text'
-            : before === '~~'
-            ? 'strikethrough text'
-            : before === '`'
-            ? 'code'
-            : '';
-        const insertText = placeholder ? `${before}${placeholder}${after}` : `${before}${after}`;
-        const newVal = currentVal.substring(0, start) + insertText + currentVal.substring(end);
-        setRoomChatInput(newVal);
-        setTimeout(() => {
-          inputElement.focus();
-          if (placeholder) {
-            inputElement.setSelectionRange(start + before.length, start + before.length + placeholder.length);
-          } else {
-            inputElement.setSelectionRange(start + before.length, start + before.length);
-          }
-        }, 0);
+        document.execCommand('fontName', false, 'monospace');
+      }
+    } else if (command === 'createLink') {
+      const sel = window.getSelection();
+      const url = window.prompt('Enter link URL (e.g. https://cosmos.video):', 'https://');
+      if (url && url !== 'https://') {
+        if (sel && !sel.isCollapsed) {
+          document.execCommand('createLink', false, url);
+        } else {
+          document.execCommand(
+            'insertHTML',
+            false,
+            `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">${url}</a>&nbsp;`
+          );
+        }
       }
     } else {
-      setRoomChatInput((prev) => `${prev}${before}${after}`);
+      document.execCommand(command, false, value);
     }
+    syncActiveFormats();
   };
 
   // Safe HTML generator for all markdown tokens (Bold, Italic, Underline, Strike, Code, Lists, Links)
@@ -2047,21 +2073,41 @@ export const OfficeSpace: React.FC = () => {
 
   // Send message in room chat (supporting text & file transfer)
   const handleSendRoomMessage = async () => {
-    const text = roomChatInput.trim();
-    if ((!text && !attachedFile) || isSendingRoomMsg) return;
+    const htmlContent = roomChatEditorRef.current?.innerHTML?.trim() || '';
+    const plainText = roomChatEditorRef.current?.innerText?.trim() || '';
+
+    if ((!plainText && !htmlContent && !attachedFile) || isSendingRoomMsg) return;
 
     const roomId = currentRoomDisplayName.toLowerCase().replace(/\s+/g, '-');
+
+    // Use rich html if formatted, otherwise plainText
+    const textToSend =
+      htmlContent && htmlContent !== plainText && htmlContent !== '<br>'
+        ? htmlContent
+        : plainText;
 
     const messagePayload = attachedFile
       ? JSON.stringify({
           __cosmos_file__: true,
-          text,
+          text: textToSend,
           file: attachedFile,
         })
-      : text;
+      : textToSend;
 
-    // Reset input fields immediately for zero-delay UI feel
-    setRoomChatInput('');
+    // Reset editor immediately for zero-delay UI feel
+    if (roomChatEditorRef.current) {
+      roomChatEditorRef.current.innerHTML = '';
+    }
+    setIsEditorEmpty(true);
+    setActiveFormats({
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      list: false,
+      numList: false,
+      code: false,
+    });
     setAttachedFile(null);
 
     // Optimistic UI update: Insert message immediately into room chat
@@ -2093,7 +2139,6 @@ export const OfficeSpace: React.FC = () => {
       }
     } catch (e) {
       console.warn('Background sync notice for room message:', e);
-      // Keep optimistic message visible in chat list so user doesn't lose content
     } finally {
       setIsSendingRoomMsg(false);
     }
@@ -4027,15 +4072,136 @@ export const OfficeSpace: React.FC = () => {
                     >
                       {/* Formatting Tools (Bold, Italic, Underline, Strikethrough, List, Number, Code, Link) */}
                       {isFormatBarOpen && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
-                          <Tooltip title="Bold"><BoldOutlined onClick={() => insertFormat('**', '**')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Italic"><ItalicOutlined onClick={() => insertFormat('*', '*')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Underline"><UnderlineOutlined onClick={() => insertFormat('<u>', '</u>')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Strikethrough"><StrikethroughOutlined onClick={() => insertFormat('~~', '~~')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Bullet List"><UnorderedListOutlined onClick={() => insertFormat('\n• ')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Numbered List"><OrderedListOutlined onClick={() => insertFormat('\n1. ')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Code"><CodeOutlined onClick={() => insertFormat('`', '`')} style={{ cursor: 'pointer' }} /></Tooltip>
-                          <Tooltip title="Link"><LinkOutlined onClick={() => insertFormat('[link text](https://)')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                          <Tooltip title="Bold (Ctrl+B)">
+                            <div
+                              onClick={() => applyFormat('bold')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.bold ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.bold ? '#0f172a' : '#64748b',
+                                fontWeight: activeFormats.bold ? 800 : 600,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <BoldOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Italic (Ctrl+I)">
+                            <div
+                              onClick={() => applyFormat('italic')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.italic ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.italic ? '#0f172a' : '#64748b',
+                                fontStyle: activeFormats.italic ? 'italic' : 'normal',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <ItalicOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Underline (Ctrl+U)">
+                            <div
+                              onClick={() => applyFormat('underline')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.underline ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.underline ? '#0f172a' : '#64748b',
+                                textDecoration: activeFormats.underline ? 'underline' : 'none',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <UnderlineOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Strikethrough">
+                            <div
+                              onClick={() => applyFormat('strikeThrough')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.strike ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.strike ? '#0f172a' : '#64748b',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <StrikethroughOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Bullet List">
+                            <div
+                              onClick={() => applyFormat('insertUnorderedList')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.list ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.list ? '#0f172a' : '#64748b',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <UnorderedListOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Numbered List">
+                            <div
+                              onClick={() => applyFormat('insertOrderedList')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.numList ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.numList ? '#0f172a' : '#64748b',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <OrderedListOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Code">
+                            <div
+                              onClick={() => applyFormat('code')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                backgroundColor: activeFormats.code ? '#e2e8f0' : 'transparent',
+                                color: activeFormats.code ? '#0f172a' : '#64748b',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <CodeOutlined />
+                            </div>
+                          </Tooltip>
+
+                          <Tooltip title="Link">
+                            <div
+                              onClick={() => applyFormat('createLink')}
+                              style={{
+                                cursor: 'pointer',
+                                padding: '2px 7px',
+                                borderRadius: 4,
+                                color: '#64748b',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <LinkOutlined />
+                            </div>
+                          </Tooltip>
                         </div>
                       )}
 
@@ -4084,22 +4250,56 @@ export const OfficeSpace: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Input Area */}
-                      <Input.TextArea
-                        ref={roomChatInputRef}
-                        value={roomChatInput}
-                        onChange={(e) => setRoomChatInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendRoomMessage();
-                          }
+                      {/* WYSIWYG ContentEditable Input Area (Direct Visual Formatting like Cosmos Video) */}
+                      <div
+                        style={{
+                          position: 'relative',
+                          minHeight: 44,
+                          cursor: 'text',
                         }}
-                        placeholder={`Message ${currentRoomDisplayName}`}
-                        autoSize={{ minRows: 2, maxRows: 4 }}
-                        bordered={false}
-                        style={{ padding: 0, fontSize: 13, resize: 'none' }}
-                      />
+                        onClick={() => roomChatEditorRef.current?.focus()}
+                      >
+                        {isEditorEmpty && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 2,
+                              left: 0,
+                              color: '#94a3b8',
+                              fontSize: 13,
+                              pointerEvents: 'none',
+                              userSelect: 'none',
+                            }}
+                          >
+                            {`Message ${currentRoomDisplayName}`}
+                          </div>
+                        )}
+                        <div
+                          ref={roomChatEditorRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={syncActiveFormats}
+                          onKeyUp={syncActiveFormats}
+                          onMouseUp={syncActiveFormats}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSendRoomMessage();
+                            }
+                          }}
+                          style={{
+                            outline: 'none',
+                            minHeight: 44,
+                            maxHeight: 140,
+                            overflowY: 'auto',
+                            fontSize: 13,
+                            lineHeight: 1.5,
+                            color: '#0f172a',
+                            wordBreak: 'break-word',
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        />
+                      </div>
 
                       {/* Bottom Actions: File Attach (+), Format (Aa), Emojis, Mention (@), Send */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
@@ -4150,7 +4350,9 @@ export const OfficeSpace: React.FC = () => {
                                   <span
                                     key={em}
                                     onClick={() => {
-                                      setRoomChatInput((prev) => `${prev} ${em}`);
+                                      roomChatEditorRef.current?.focus();
+                                      document.execCommand('insertText', false, `${em} `);
+                                      syncActiveFormats();
                                       setIsEmojiPickerOpen(false);
                                     }}
                                     style={{ fontSize: 20, cursor: 'pointer', textAlign: 'center', padding: 2, borderRadius: 4 }}
@@ -4167,7 +4369,16 @@ export const OfficeSpace: React.FC = () => {
                           </Popover>
 
                           <Tooltip title="Mention">
-                            <span style={{ fontSize: 13, cursor: 'pointer' }}>@</span>
+                            <span
+                              onClick={() => {
+                                roomChatEditorRef.current?.focus();
+                                document.execCommand('insertText', false, '@');
+                                syncActiveFormats();
+                              }}
+                              style={{ fontSize: 13, cursor: 'pointer' }}
+                            >
+                              @
+                            </span>
                           </Tooltip>
                         </div>
                         <Button
@@ -4176,10 +4387,10 @@ export const OfficeSpace: React.FC = () => {
                           size="small"
                           icon={<SendOutlined style={{ fontSize: 12 }} />}
                           loading={isSendingRoomMsg}
-                          disabled={!roomChatInput.trim() && !attachedFile}
+                          disabled={isEditorEmpty && !attachedFile}
                           onClick={handleSendRoomMessage}
                           style={{
-                            backgroundColor: (roomChatInput.trim() || attachedFile) ? '#1e1e24' : '#e2e8f0',
+                            backgroundColor: (!isEditorEmpty || attachedFile) ? '#1e1e24' : '#e2e8f0',
                             border: 'none',
                             color: '#ffffff',
                           }}
