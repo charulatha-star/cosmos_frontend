@@ -16,6 +16,7 @@ import {
   Switch,
   Checkbox,
   Spin,
+  Popover,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -52,10 +53,12 @@ import {
   PaperClipOutlined,
   BoldOutlined,
   ItalicOutlined,
+  UnderlineOutlined,
   StrikethroughOutlined,
   UnorderedListOutlined,
   OrderedListOutlined,
   CodeOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import {
   Room,
@@ -555,7 +558,19 @@ export const OfficeSpace: React.FC = () => {
   const [isCameraOff, setIsCameraOff] = useState<boolean>(true);
   const [isHandRaised, setIsHandRaised] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [isCallChatOpen, setIsCallChatOpen] = useState<boolean>(false);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
+
+  // File Transfer & Emoji States for Room/Call Chat
+  const [attachedFile, setAttachedFile] = useState<{
+    name: string;
+    sizeStr: string;
+    sizeBytes: number;
+    type: string;
+    dataUrl: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false);
 
   // Real Hardware WebRTC & LiveKit States
   const roomRef = useRef<Room | null>(null);
@@ -1704,19 +1719,128 @@ export const OfficeSpace: React.FC = () => {
     };
   }, [currentSpace, user?.id]);
 
+  // Current placed room/desk name (e.g. Desk 10, Meeting Room 1, Cabin 2)
+  const currentRoomDisplayName =
+    activeZone && activeZone !== 'Reception Area'
+      ? activeZone
+      : 'Meeting Room 1';
+
+  // Format insertion helper for rich text buttons
+  const insertFormat = (before: string, after: string = '') => {
+    setRoomChatInput((prev) => `${prev}${before}${after}`);
+  };
+
+  // File upload & attachment handler for room chat
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      message.error('File size exceeds 10MB limit');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const sizeStr =
+        file.size < 1024 * 1024
+          ? `${Math.round(file.size / 1024)} KB`
+          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+      setAttachedFile({
+        name: file.name,
+        sizeStr,
+        sizeBytes: file.size,
+        type: file.type || 'application/octet-stream',
+        dataUrl,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Parser for messages with file transfers / attachments
+  const renderMessageContent = (rawText: string) => {
+    let parsed: any = null;
+    if (rawText && rawText.startsWith('{') && rawText.includes('__cosmos_file__')) {
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {}
+    }
+
+    if (parsed && parsed.__cosmos_file__ && parsed.file) {
+      const f = parsed.file;
+      const isImage = f.type && f.type.startsWith('image/');
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {parsed.text && (
+            <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.4 }}>
+              {parsed.text}
+            </div>
+          )}
+          {isImage ? (
+            <div style={{ marginTop: 4 }}>
+              <img
+                src={f.dataUrl}
+                alt={f.name}
+                style={{
+                  maxWidth: 240,
+                  maxHeight: 180,
+                  borderRadius: 8,
+                  objectFit: 'contain',
+                  border: '1px solid #e2e8f0',
+                  cursor: 'pointer',
+                  backgroundColor: '#f8fafc',
+                }}
+                onClick={() => {
+                  const w = window.open('');
+                  w?.document.write(`<img src="${f.dataUrl}" style="max-width:100%"/>`);
+                }}
+              />
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                {f.name} ({f.sizeStr})
+              </div>
+            </div>
+          ) : (
+            <a
+              href={f.dataUrl}
+              download={f.name}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 12px',
+                backgroundColor: '#f1f5f9',
+                borderRadius: 8,
+                border: '1px solid #e2e8f0',
+                textDecoration: 'none',
+                color: '#0f172a',
+                marginTop: 4,
+              }}
+            >
+              <FileTextOutlined style={{ fontSize: 20, color: '#2563eb' }} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{f.name}</div>
+                <div style={{ fontSize: 10, color: '#64748b' }}>{f.sizeStr} · Click to download</div>
+              </div>
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ fontSize: 13, color: '#334155', marginTop: 2, lineHeight: 1.4 }}>
+        {rawText}
+      </div>
+    );
+  };
+
   // Poll in-room messages when inside a room or in call mode (Cosmos Images 2 & 5)
   useEffect(() => {
     let isMounted = true;
-    const effectiveRoom =
-      activeZone && activeZone !== 'Reception Area'
-        ? activeZone
-        : viewMode === 'call'
-        ? 'Meeting Room 2'
-        : null;
-
-    if (!effectiveRoom) return;
-
-    const roomId = effectiveRoom.toLowerCase().replace(/\s+/g, '-');
+    const roomId = currentRoomDisplayName.toLowerCase().replace(/\s+/g, '-');
 
     const fetchRoomMsgs = async () => {
       try {
@@ -1727,15 +1851,19 @@ export const OfficeSpace: React.FC = () => {
           if (msgs.length > prevMsgCountRef.current && prevMsgCountRef.current > 0) {
             const lastMsg = msgs[msgs.length - 1];
             if (lastMsg && String(lastMsg.sender_id) !== String(user?.id)) {
+              const toastText =
+                lastMsg.text.startsWith('{') && lastMsg.text.includes('__cosmos_file__')
+                  ? 'Shared an attachment'
+                  : lastMsg.text;
               setFloatingRoomToast({
-                roomName: effectiveRoom,
+                roomName: currentRoomDisplayName,
                 senderName: lastMsg.sender_name || 'Teammate',
-                text: lastMsg.text,
+                text: toastText,
                 avatarSeed: lastMsg.sender_name,
               });
               triggerDesktopNotification(
-                effectiveRoom,
-                `${lastMsg.sender_name || 'Teammate'}: ${lastMsg.text}`
+                currentRoomDisplayName,
+                `${lastMsg.sender_name || 'Teammate'}: ${toastText}`
               );
             }
           }
@@ -1752,7 +1880,7 @@ export const OfficeSpace: React.FC = () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [activeZone, viewMode, user?.id, triggerDesktopNotification]);
+  }, [currentRoomDisplayName, viewMode, user?.id, triggerDesktopNotification]);
 
   // Auto-dismiss floating toast after 6 seconds
   useEffect(() => {
@@ -1763,23 +1891,26 @@ export const OfficeSpace: React.FC = () => {
     return () => clearTimeout(timer);
   }, [floatingRoomToast]);
 
-  // Send message in room chat
+  // Send message in room chat (supporting text & file transfer)
   const handleSendRoomMessage = async () => {
     const text = roomChatInput.trim();
-    if (!text || isSendingRoomMsg) return;
+    if ((!text && !attachedFile) || isSendingRoomMsg) return;
 
-    const effectiveRoom =
-      activeZone && activeZone !== 'Reception Area'
-        ? activeZone
-        : viewMode === 'call'
-        ? 'Meeting Room 2'
-        : 'Meeting Room 2';
-    const roomId = effectiveRoom.toLowerCase().replace(/\s+/g, '-');
+    const roomId = currentRoomDisplayName.toLowerCase().replace(/\s+/g, '-');
+
+    const messagePayload = attachedFile
+      ? JSON.stringify({
+          __cosmos_file__: true,
+          text,
+          file: attachedFile,
+        })
+      : text;
 
     setIsSendingRoomMsg(true);
     setRoomChatInput('');
+    setAttachedFile(null);
     try {
-      const newMsg = await chatApi.sendRoomMessage(roomId, text);
+      const newMsg = await chatApi.sendRoomMessage(roomId, messagePayload);
       if (newMsg) {
         setRoomMessages((prev) => [...prev, newMsg]);
         prevMsgCountRef.current += 1;
@@ -3388,17 +3519,20 @@ export const OfficeSpace: React.FC = () => {
                   {/* Participant 1: Local User Video Card (e.g. Charulatha) */}
                   <div
                     style={{
-                      flex: 1,
+                      flex: remoteCallParticipants.length > 0 ? 1 : 'none',
+                      width: remoteCallParticipants.length > 0 ? '100%' : '100%',
+                      maxWidth: remoteCallParticipants.length > 0 ? 'none' : (isCallChatOpen ? 640 : 780),
                       height: '100%',
                       maxHeight: 'calc(100vh - 150px)',
-                      borderRadius: 14,
-                      backgroundColor: isCameraOff && !isScreenSharing ? '#1e293b' : '#000000',
+                      borderRadius: 16,
+                      backgroundColor: isCameraOff && !isScreenSharing ? '#ec4899' : '#000000',
                       overflow: 'hidden',
                       position: 'relative',
                       boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      transition: 'all 0.25s ease',
                     }}
                   >
                     {!isCameraOff || isScreenSharing ? (
@@ -3460,26 +3594,62 @@ export const OfficeSpace: React.FC = () => {
                     />
                   </div>
 
-                  {/* Remote Peer Video Cards */}
-                  {remoteCallParticipants.length === 0 ? (
+                  {/* Remote Peer Video Cards (Only rendered when others are present) */}
+                  {remoteCallParticipants.map((p) => (
                     <div
+                      key={`remote-call-card-${p.id}`}
                       style={{
                         flex: 1,
                         height: '100%',
                         maxHeight: 'calc(100vh - 150px)',
-                        borderRadius: 14,
-                        backgroundColor: '#1e293b',
+                        borderRadius: 16,
+                        backgroundColor: p.isAway ? '#06b6d4' : (p.isCameraOn ? '#000000' : p.bgColor || '#0ea5e9'),
                         overflow: 'hidden',
                         position: 'relative',
                         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        transition: 'all 0.25s ease',
                       }}
                     >
-                      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                        <EmptyOfficeChairView />
-                      </div>
+                      {p.isAway ? (
+                        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                          <EmptyOfficeChairView />
+                        </div>
+                      ) : p.isCameraOn && (p.videoTrack || p.videoStream) ? (
+                        <CallViewVideoTile
+                          track={p.videoTrack}
+                          stream={p.videoStream}
+                          isScreenShare={false}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getAvatarUrl({
+                              name: p.name,
+                              avatar_seed: p.avatarSeed,
+                            } as User)}
+                            alt="Peer Avatar"
+                            style={{
+                              width: 220,
+                              height: 220,
+                              objectFit: 'contain',
+                              filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.18))',
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Bottom Left Name Badge */}
                       <div
                         style={{
                           position: 'absolute',
@@ -3496,107 +3666,29 @@ export const OfficeSpace: React.FC = () => {
                           zIndex: 2,
                         }}
                       >
+                        {p.isMuted && <AudioMutedOutlined style={{ color: '#ef4444', fontSize: 13 }} />}
                         <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 12 }}>
-                          Waiting for teammates to join...
+                          {p.name || 'Teammate'}
                         </span>
                       </div>
-                    </div>
-                  ) : (
-                    remoteCallParticipants.map((p) => (
+
+                      {/* Bottom Right Status Dot (Red if Away, Green otherwise) */}
                       <div
-                        key={`remote-call-card-${p.id}`}
                         style={{
-                          flex: 1,
-                          height: '100%',
-                          maxHeight: 'calc(100vh - 150px)',
-                          borderRadius: 14,
-                          backgroundColor: '#1e293b',
-                          overflow: 'hidden',
-                          position: 'relative',
-                          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          position: 'absolute',
+                          bottom: 18,
+                          right: 18,
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          backgroundColor: p.isAway ? '#ef4444' : '#22c55e',
+                          border: '2px solid #ffffff',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          zIndex: 2,
                         }}
-                      >
-                        {p.isAway ? (
-                          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                            <EmptyOfficeChairView />
-                          </div>
-                        ) : p.isCameraOn && (p.videoTrack || p.videoStream) ? (
-                          <CallViewVideoTile
-                            track={p.videoTrack}
-                            stream={p.videoStream}
-                            isScreenShare={false}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              backgroundColor: '#1e293b',
-                            }}
-                          >
-                            <img
-                              src={getAvatarUrl({
-                                name: p.name,
-                                avatar_seed: p.avatarSeed,
-                              } as User)}
-                              alt="Peer Avatar"
-                              style={{
-                                width: 220,
-                                height: 220,
-                                objectFit: 'contain',
-                                filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.18))',
-                              }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Bottom Left Name Badge */}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            bottom: 16,
-                            left: 16,
-                            backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                            backdropFilter: 'blur(6px)',
-                            padding: '4px 12px',
-                            borderRadius: 16,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                            zIndex: 2,
-                          }}
-                        >
-                          {p.isMuted && <AudioMutedOutlined style={{ color: '#ef4444', fontSize: 13 }} />}
-                          <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 12 }}>
-                            {p.name || 'Teammate'}
-                          </span>
-                        </div>
-
-                        {/* Bottom Right Status Dot (Red if Away, Green otherwise) */}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            bottom: 18,
-                            right: 18,
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            backgroundColor: p.isAway ? '#ef4444' : '#22c55e',
-                            border: '2px solid #ffffff',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                            zIndex: 2,
-                          }}
-                        />
-                      </div>
-                    ))
-                  )}
+                      />
+                    </div>
+                  ))}
 
                   {/* Remote Audio Players for Call View */}
                   {remoteCallParticipants.map((p) => (
@@ -3652,171 +3744,266 @@ export const OfficeSpace: React.FC = () => {
                 )}
               </div>
 
-              {/* Right Side: Dedicated Meeting Room Chat Sidebar (Cosmos Image 2 Match) */}
-              <div
-                style={{
-                  width: 390,
-                  height: '100%',
-                  borderLeft: '1px solid #e2e8f0',
-                  backgroundColor: '#ffffff',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Chat Header */}
+              {/* Right Side: Dedicated Meeting Room / Desk Chat Sidebar (Cosmos Image 2 & 5 Match) */}
+              {isCallChatOpen && (
                 <div
                   style={{
-                    padding: '14px 20px',
-                    borderBottom: '1px solid #f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                      {activeZone && activeZone !== 'Reception Area' ? activeZone : 'Meeting Room 2'}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b' }}>Room chat</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#64748b' }}>
-                    <Tooltip title="Notifications (Click to test / enable)"><BellOutlined onClick={handleEnableNotifications} style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                    <Tooltip title="Pinned"><PushpinOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                    <Tooltip title="Files"><FolderOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                    <Tooltip title="Members"><TeamOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
-                    <Tooltip title="More"><EllipsisOutlined style={{ fontSize: 18, cursor: 'pointer' }} /></Tooltip>
-                    <Tooltip title="Back to Space">
-                      <CloseOutlined
-                        onClick={() => setViewMode('space')}
-                        style={{ fontSize: 16, cursor: 'pointer', color: '#0f172a' }}
-                      />
-                    </Tooltip>
-                  </div>
-                </div>
-
-                {/* Chat Messages Body */}
-                <div
-                  style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    padding: '20px',
+                    width: 390,
+                    height: '100%',
+                    borderLeft: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 16,
+                    overflow: 'hidden',
                   }}
                 >
-                  {roomMessages.length === 0 ? (
-                    <div style={{ marginTop: 'auto', marginBottom: 24 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                        This is the beginning of your chat history in {activeZone && activeZone !== 'Reception Area' ? activeZone : 'Meeting Room 2'}.
-                      </div>
-                      <div style={{ fontSize: 13, color: '#64748b' }}>
-                        Send messages, attachments, links, emojis, and more.
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', backgroundColor: '#f8fafc', padding: '2px 10px', borderRadius: 10 }}>
-                          Today
-                        </span>
-                      </div>
-                      {roomMessages.map((msg, idx) => (
-                        <div key={msg.id || idx} style={{ display: 'flex', gap: 10 }}>
-                          <Avatar
-                            size={32}
-                            src={getAvatarUrl({ name: msg.sender_name } as User)}
-                          />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                                {msg.sender_name || 'Teammate'}
-                              </span>
-                              <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: 13, color: '#334155', marginTop: 2, lineHeight: 1.4 }}>
-                              {msg.text}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      <div ref={roomChatScrollRef} />
-                    </>
-                  )}
-                </div>
-
-                {/* Chat Composer */}
-                <div style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9' }}>
+                  {/* Chat Header */}
                   <div
                     style={{
-                      border: '1.5px solid #cbd5e1',
-                      borderRadius: 12,
-                      padding: '8px 12px',
-                      backgroundColor: '#ffffff',
+                      padding: '14px 20px',
+                      borderBottom: '1px solid #f1f5f9',
                       display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                     }}
                   >
-                    {/* Formatting Tools */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
-                      <BoldOutlined style={{ cursor: 'pointer' }} />
-                      <ItalicOutlined style={{ cursor: 'pointer' }} />
-                      <StrikethroughOutlined style={{ cursor: 'pointer' }} />
-                      <UnorderedListOutlined style={{ cursor: 'pointer' }} />
-                      <OrderedListOutlined style={{ cursor: 'pointer' }} />
-                      <CodeOutlined style={{ cursor: 'pointer' }} />
-                    </div>
-
-                    {/* Input Area */}
-                    <Input.TextArea
-                      value={roomChatInput}
-                      onChange={(e) => setRoomChatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendRoomMessage();
-                        }
-                      }}
-                      placeholder={`Message ${activeZone && activeZone !== 'Reception Area' ? activeZone : 'Meeting Room 2'}`}
-                      autoSize={{ minRows: 2, maxRows: 4 }}
-                      bordered={false}
-                      style={{ padding: 0, fontSize: 13, resize: 'none' }}
-                    />
-
-                    {/* Bottom Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 15 }}>
-                        <PaperClipOutlined style={{ cursor: 'pointer' }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Aa</span>
-                        <SmileOutlined style={{ cursor: 'pointer' }} />
-                        <span style={{ fontSize: 13, cursor: 'pointer' }}>@</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                        {currentRoomDisplayName}
                       </div>
-                      <Button
-                        type="primary"
-                        shape="circle"
-                        size="small"
-                        icon={<SendOutlined style={{ fontSize: 12 }} />}
-                        loading={isSendingRoomMsg}
-                        disabled={!roomChatInput.trim()}
-                        onClick={handleSendRoomMessage}
-                        style={{
-                          backgroundColor: roomChatInput.trim() ? '#1e1e24' : '#e2e8f0',
-                          border: 'none',
-                          color: '#ffffff',
-                        }}
-                      />
+                      <div style={{ fontSize: 12, color: '#64748b' }}>Room chat</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#64748b' }}>
+                      <Tooltip title="Notifications (Click to test / enable)"><BellOutlined onClick={handleEnableNotifications} style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
+                      <Tooltip title="Pinned"><PushpinOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
+                      <Tooltip title="Files"><FolderOutlined style={{ fontSize: 16, cursor: 'pointer' }} /></Tooltip>
+                      <Tooltip title="Close chat">
+                        <CloseOutlined
+                          onClick={() => setIsCallChatOpen(false)}
+                          style={{ fontSize: 16, cursor: 'pointer', color: '#0f172a' }}
+                        />
+                      </Tooltip>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                    Shift + Enter for a new line
+
+                  {/* Chat Messages Body */}
+                  <div
+                    style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    {roomMessages.length === 0 ? (
+                      <div style={{ marginTop: 'auto', marginBottom: 24 }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                          This is the beginning of your chat history in {currentRoomDisplayName}.
+                        </div>
+                        <div style={{ fontSize: 13, color: '#64748b' }}>
+                          Send messages, attachments, links, emojis, and more.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', backgroundColor: '#f8fafc', padding: '2px 10px', borderRadius: 10 }}>
+                            Today
+                          </span>
+                        </div>
+                        {roomMessages.map((msg, idx) => (
+                          <div key={msg.id || idx} style={{ display: 'flex', gap: 10 }}>
+                            <Avatar
+                              size={32}
+                              src={getAvatarUrl({ name: msg.sender_name } as User)}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                                  {msg.sender_name || 'Teammate'}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                                </span>
+                              </div>
+                              <div style={{ marginTop: 2 }}>
+                                {renderMessageContent(msg.text)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div ref={roomChatScrollRef} />
+                      </>
+                    )}
+                  </div>
+
+                  {/* Chat Composer */}
+                  <div style={{ padding: '14px 18px', borderTop: '1px solid #f1f5f9' }}>
+                    <div
+                      style={{
+                        border: '1.5px solid #cbd5e1',
+                        borderRadius: 12,
+                        padding: '8px 12px',
+                        backgroundColor: '#ffffff',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      }}
+                    >
+                      {/* Formatting Tools (Bold, Italic, Underline, Strikethrough, List, Number, Code, Link) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                        <Tooltip title="Bold"><BoldOutlined onClick={() => insertFormat('**', '**')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Italic"><ItalicOutlined onClick={() => insertFormat('*', '*')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Underline"><UnderlineOutlined onClick={() => insertFormat('<u>', '</u>')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Strikethrough"><StrikethroughOutlined onClick={() => insertFormat('~~', '~~')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Bullet List"><UnorderedListOutlined onClick={() => insertFormat('\n• ')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Numbered List"><OrderedListOutlined onClick={() => insertFormat('\n1. ')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Code"><CodeOutlined onClick={() => insertFormat('`', '`')} style={{ cursor: 'pointer' }} /></Tooltip>
+                        <Tooltip title="Link"><LinkOutlined onClick={() => insertFormat('[link text](https://)')} style={{ cursor: 'pointer' }} /></Tooltip>
+                      </div>
+
+                      {/* Attached File Preview Card (Matching Cosmos Image 2) */}
+                      {attachedFile && (
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            backgroundColor: '#1e293b',
+                            color: '#ffffff',
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            maxWidth: 280,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {attachedFile.type.startsWith('image/') ? (
+                            <img
+                              src={attachedFile.dataUrl}
+                              alt="preview"
+                              style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4 }}
+                            />
+                          ) : (
+                            <FileTextOutlined style={{ fontSize: 20, color: '#38bdf8' }} />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {attachedFile.name}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{attachedFile.sizeStr}</div>
+                          </div>
+                          <CloseOutlined
+                            onClick={() => setAttachedFile(null)}
+                            style={{ fontSize: 11, color: '#94a3b8', cursor: 'pointer', padding: 2 }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Input Area */}
+                      <Input.TextArea
+                        value={roomChatInput}
+                        onChange={(e) => setRoomChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendRoomMessage();
+                          }
+                        }}
+                        placeholder={`Message ${currentRoomDisplayName}`}
+                        autoSize={{ minRows: 2, maxRows: 4 }}
+                        bordered={false}
+                        style={{ padding: 0, fontSize: 13, resize: 'none' }}
+                      />
+
+                      {/* Bottom Actions: File Attach (+), Format (Aa), Emojis, Mention (@), Send */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748b', fontSize: 15 }}>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={handleFileSelect}
+                            accept="image/*,.pdf,.doc,.docx,.txt,.zip"
+                          />
+                          <Tooltip title="Attach image or document">
+                            <PlusOutlined
+                              onClick={() => fileInputRef.current?.click()}
+                              style={{ cursor: 'pointer', fontSize: 14, color: attachedFile ? '#38bdf8' : '#64748b' }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Attach file">
+                            <PaperClipOutlined
+                              onClick={() => fileInputRef.current?.click()}
+                              style={{ cursor: 'pointer', color: attachedFile ? '#38bdf8' : '#64748b' }}
+                            />
+                          </Tooltip>
+                          <span style={{ fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Aa</span>
+
+                          {/* Emoji Picker Popover */}
+                          <Popover
+                            open={isEmojiPickerOpen}
+                            onOpenChange={setIsEmojiPickerOpen}
+                            trigger="click"
+                            placement="topLeft"
+                            content={
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, padding: 4 }}>
+                                {['👍', '❤️', '😂', '🎉', '🔥', '👏', '🚀', '👋', '✨', '💯', '🤝', '👀', '😊', '🙌', '💡', '✅', '😍', '🎯'].map((em) => (
+                                  <span
+                                    key={em}
+                                    onClick={() => {
+                                      setRoomChatInput((prev) => `${prev} ${em}`);
+                                      setIsEmojiPickerOpen(false);
+                                    }}
+                                    style={{ fontSize: 20, cursor: 'pointer', textAlign: 'center', padding: 2, borderRadius: 4 }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                  >
+                                    {em}
+                                  </span>
+                                ))}
+                              </div>
+                            }
+                          >
+                            <SmileOutlined style={{ cursor: 'pointer' }} />
+                          </Popover>
+
+                          <Tooltip title="Mention">
+                            <span style={{ fontSize: 13, cursor: 'pointer' }}>@</span>
+                          </Tooltip>
+                        </div>
+                        <Button
+                          type="primary"
+                          shape="circle"
+                          size="small"
+                          icon={<SendOutlined style={{ fontSize: 12 }} />}
+                          loading={isSendingRoomMsg}
+                          disabled={!roomChatInput.trim() && !attachedFile}
+                          onClick={handleSendRoomMessage}
+                          style={{
+                            backgroundColor: (roomChatInput.trim() || attachedFile) ? '#1e1e24' : '#e2e8f0',
+                            border: 'none',
+                            color: '#ffffff',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                      Shift + Enter for a new line
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -4198,18 +4385,26 @@ export const OfficeSpace: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
           {/* Chat */}
           <div
-            onClick={() => setIsChatOpen(true)}
+            onClick={() => {
+              if (viewMode === 'call') {
+                setIsCallChatOpen((prev) => !prev);
+              } else {
+                setIsChatOpen(true);
+              }
+            }}
             style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               cursor: 'pointer',
-              color: isChatOpen ? '#38bdf8' : '#94a3b8',
+              color: (viewMode === 'call' ? isCallChatOpen : isChatOpen) ? '#38bdf8' : '#94a3b8',
               minWidth: 46,
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = isChatOpen ? '#38bdf8' : '#94a3b8')}
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.color = (viewMode === 'call' ? isCallChatOpen : isChatOpen) ? '#38bdf8' : '#94a3b8')
+            }
           >
             <MessageOutlined style={{ fontSize: 20 }} />
             <span style={{ fontSize: 11, fontWeight: 500, marginTop: 4, letterSpacing: '0.01em' }}>
