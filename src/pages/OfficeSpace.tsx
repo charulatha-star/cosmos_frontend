@@ -419,6 +419,122 @@ const createVirtualCameraStream = (userName: string, _avatarSeed: string): Media
   return stream;
 };
 
+// Stable video tile component for Call View to prevent re-attaching on every parent re-render
+const CallViewVideoTile: React.FC<{
+  track?: any;
+  stream?: MediaStream | null;
+  isScreenShare?: boolean;
+}> = React.memo(({ track, stream, isScreenShare }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    el.muted = true;
+    el.defaultMuted = true;
+    el.playsInline = true;
+    el.setAttribute('playsinline', '');
+    el.setAttribute('muted', '');
+    el.setAttribute('autoplay', '');
+
+    let activeTrack: any = track;
+
+    if (activeTrack && 'attach' in activeTrack && typeof activeTrack.attach === 'function') {
+      try {
+        activeTrack.attach(el);
+      } catch {
+        try {
+          el.srcObject = new MediaStream([activeTrack as MediaStreamTrack]);
+        } catch {}
+      }
+    } else if (stream instanceof MediaStream) {
+      el.srcObject = stream;
+    } else if (activeTrack && 'kind' in activeTrack) {
+      try {
+        el.srcObject = new MediaStream([activeTrack as MediaStreamTrack]);
+      } catch {}
+    } else {
+      el.srcObject = null;
+    }
+
+    const playPromise = el.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {});
+    }
+
+    const handlePause = () => {
+      if (el && !el.ended) {
+        el.play().catch(() => {});
+      }
+    };
+    el.addEventListener('pause', handlePause);
+
+    return () => {
+      el.removeEventListener('pause', handlePause);
+      if (activeTrack && 'detach' in activeTrack && typeof activeTrack.detach === 'function') {
+        try {
+          activeTrack.detach(el);
+        } catch {}
+      }
+      el.srcObject = null;
+    };
+  }, [track, stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: isScreenShare ? 'contain' : 'cover',
+        backgroundColor: '#000000',
+      }}
+    />
+  );
+});
+
+// Stable audio player component for Call View to prevent re-attaching on every parent re-render
+const CallViewAudioPlayer: React.FC<{
+  track?: any;
+}> = React.memo(({ track }) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !track) return;
+
+    if ('attach' in track && typeof (track as any).attach === 'function') {
+      try {
+        (track as any).attach(el);
+      } catch {}
+    } else if ('kind' in (track as any)) {
+      try {
+        el.srcObject = new MediaStream([track as MediaStreamTrack]);
+      } catch {}
+    }
+
+    const playPromise = el.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {});
+    }
+
+    return () => {
+      if ('detach' in track && typeof (track as any).detach === 'function') {
+        try {
+          (track as any).detach(el);
+        } catch {}
+      }
+      el.srcObject = null;
+    };
+  }, [track]);
+
+  return <audio ref={audioRef} autoPlay playsInline />;
+});
+
 export const OfficeSpace: React.FC = () => {
   const { spaceId } = useParams<{ spaceId: string }>();
   const currentSpace = spaceId || 'billion';
@@ -3286,34 +3402,10 @@ export const OfficeSpace: React.FC = () => {
                     }}
                   >
                     {!isCameraOff || isScreenSharing ? (
-                      <video
-                        autoPlay
-                        playsInline
-                        muted
-                        ref={(el) => {
-                          if (el) {
-                            if (isScreenSharing) {
-                              if (activeScreenTrack && 'attach' in activeScreenTrack && typeof (activeScreenTrack as any).attach === 'function') {
-                                try { (activeScreenTrack as any).attach(el); } catch {}
-                              } else if (screenStream && el.srcObject !== screenStream) {
-                                el.srcObject = screenStream;
-                              }
-                            } else if (!isCameraOff) {
-                              if (localVideoTrack && 'attach' in localVideoTrack && typeof (localVideoTrack as any).attach === 'function') {
-                                try { (localVideoTrack as any).attach(el); } catch {}
-                              } else if (cameraStream && el.srcObject !== cameraStream) {
-                                el.srcObject = cameraStream;
-                              }
-                            }
-                            el.play().catch(() => {});
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: isScreenSharing ? 'contain' : 'cover',
-                          backgroundColor: '#000000',
-                        }}
+                      <CallViewVideoTile
+                        track={isScreenSharing ? (activeScreenTrack as any) : localVideoTrack}
+                        stream={isScreenSharing ? screenStream : cameraStream}
+                        isScreenShare={isScreenSharing}
                       />
                     ) : (
                       <img
@@ -3368,143 +3460,149 @@ export const OfficeSpace: React.FC = () => {
                     />
                   </div>
 
-                  {/* Participant 2: Remote Peer Video Card (e.g. Charu) */}
-                  <div
-                    style={{
-                      flex: 1,
-                      height: '100%',
-                      maxHeight: 'calc(100vh - 150px)',
-                      borderRadius: 14,
-                      backgroundColor: '#1e293b',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {remoteCallParticipants.length > 0 && remoteCallParticipants[0].isAway ? (
-                      /* Teammate is Away -> Modern Empty Office Chair (Matching Image 4) */
+                  {/* Remote Peer Video Cards */}
+                  {remoteCallParticipants.length === 0 ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        height: '100%',
+                        maxHeight: 'calc(100vh - 150px)',
+                        borderRadius: 14,
+                        backgroundColor: '#1e293b',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
                       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                         <EmptyOfficeChairView />
                       </div>
-                    ) : remoteCallParticipants.length > 0 && remoteCallParticipants[0].isCameraOn && (remoteCallParticipants[0].videoTrack || remoteCallParticipants[0].videoStream) ? (
-                      <video
-                        autoPlay
-                        playsInline
-                        muted
-                        ref={(el) => {
-                          if (el) {
-                            const p = remoteCallParticipants[0];
-                            if (p.videoTrack) {
-                              const track = p.videoTrack;
-                              if ('attach' in track && typeof (track as any).attach === 'function') {
-                                try {
-                                  (track as any).attach(el);
-                                } catch {
-                                  el.srcObject = new MediaStream([track as any as MediaStreamTrack]);
-                                }
-                              } else {
-                                el.srcObject = new MediaStream([track as any as MediaStreamTrack]);
-                              }
-                            } else if (p.videoStream && el.srcObject !== p.videoStream) {
-                              el.srcObject = p.videoStream;
-                            }
-                            el.play().catch(() => {});
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          backgroundColor: '#000000',
-                        }}
-                      />
-                    ) : (
-                      /* Connected Teammate Avatar matching Cosmos Video */
                       <div
                         style={{
-                          width: '100%',
+                          position: 'absolute',
+                          bottom: 16,
+                          left: 16,
+                          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                          backdropFilter: 'blur(6px)',
+                          padding: '4px 12px',
+                          borderRadius: 16,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                          zIndex: 2,
+                        }}
+                      >
+                        <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 12 }}>
+                          Waiting for teammates to join...
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    remoteCallParticipants.map((p) => (
+                      <div
+                        key={`remote-call-card-${p.id}`}
+                        style={{
+                          flex: 1,
                           height: '100%',
+                          maxHeight: 'calc(100vh - 150px)',
+                          borderRadius: 14,
+                          backgroundColor: '#1e293b',
+                          overflow: 'hidden',
+                          position: 'relative',
+                          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          backgroundColor: '#1e293b',
                         }}
                       >
-                        <img
-                          src={getAvatarUrl({
-                            name: remoteCallParticipants[0]?.name,
-                            avatar_seed: remoteCallParticipants[0]?.avatarSeed,
-                          } as User)}
-                          alt="Peer Avatar"
+                        {p.isAway ? (
+                          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                            <EmptyOfficeChairView />
+                          </div>
+                        ) : p.isCameraOn && (p.videoTrack || p.videoStream) ? (
+                          <CallViewVideoTile
+                            track={p.videoTrack}
+                            stream={p.videoStream}
+                            isScreenShare={false}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#1e293b',
+                            }}
+                          >
+                            <img
+                              src={getAvatarUrl({
+                                name: p.name,
+                                avatar_seed: p.avatarSeed,
+                              } as User)}
+                              alt="Peer Avatar"
+                              style={{
+                                width: 220,
+                                height: 220,
+                                objectFit: 'contain',
+                                filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.18))',
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Bottom Left Name Badge */}
+                        <div
                           style={{
-                            width: 220,
-                            height: 220,
-                            objectFit: 'contain',
-                            filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.18))',
+                            position: 'absolute',
+                            bottom: 16,
+                            left: 16,
+                            backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                            backdropFilter: 'blur(6px)',
+                            padding: '4px 12px',
+                            borderRadius: 16,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                            zIndex: 2,
+                          }}
+                        >
+                          {p.isMuted && <AudioMutedOutlined style={{ color: '#ef4444', fontSize: 13 }} />}
+                          <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 12 }}>
+                            {p.name || 'Teammate'}
+                          </span>
+                        </div>
+
+                        {/* Bottom Right Status Dot (Red if Away, Green otherwise) */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 18,
+                            right: 18,
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            backgroundColor: p.isAway ? '#ef4444' : '#22c55e',
+                            border: '2px solid #ffffff',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            zIndex: 2,
                           }}
                         />
                       </div>
-                    )}
-
-                    {/* Bottom Left Name Badge */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 16,
-                        left: 16,
-                        backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                        backdropFilter: 'blur(6px)',
-                        padding: '4px 12px',
-                        borderRadius: 16,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                        zIndex: 2,
-                      }}
-                    >
-                      {remoteCallParticipants[0]?.isMuted && <AudioMutedOutlined style={{ color: '#ef4444', fontSize: 13 }} />}
-                      <span style={{ color: '#0f172a', fontWeight: 700, fontSize: 12 }}>
-                        {remoteCallParticipants[0]?.name || 'Charu'}
-                      </span>
-                    </div>
-
-                    {/* Bottom Right Status Dot (Red if Away, Green otherwise) */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 18,
-                        right: 18,
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        backgroundColor: remoteCallParticipants[0]?.isAway ? '#ef4444' : '#22c55e',
-                        border: '2px solid #ffffff',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                        zIndex: 2,
-                      }}
-                    />
-                  </div>
+                    ))
+                  )}
 
                   {/* Remote Audio Players for Call View */}
                   {remoteCallParticipants.map((p) => (
-                    <audio
+                    <CallViewAudioPlayer
                       key={`call-audio-${p.id}`}
-                      ref={(el) => {
-                        if (el && p.audioTrack) {
-                          if ('attach' in p.audioTrack && typeof (p.audioTrack as any).attach === 'function') {
-                            try { (p.audioTrack as any).attach(el); } catch {}
-                          } else {
-                            el.srcObject = new MediaStream([p.audioTrack as any as MediaStreamTrack]);
-                          }
-                          el.play().catch(() => {});
-                        }
-                      }}
-                      autoPlay
-                      playsInline
+                      track={p.audioTrack}
                     />
                   ))}
                 </div>
